@@ -58,20 +58,20 @@ def run_segmentation_from_json(json_file: str):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Process a path or return the current directory."
+        description="Program to segment the profiles of a capilary bridge."
     )
 
     parser.add_argument(
         "path",
         nargs="?",  # Makes the argument optional
         default=None,  # Default to None when the argument is not provided
-        help="The path to a directory. If not provided, the current directory will be used.",
+        help="Path to an existing valid json file. If not provided, the program will generate one such file at the current directory and ask for user input.",
     )
 
     args = parser.parse_args()
 
     # If path is None, set it to the current directory
-    path = args.path or os.path.join(os.getcwd(), "segmentation_option0s.json")
+    path = args.path or os.path.join(os.getcwd(), "segmentation_options.json")
 
     run_segmentation_from_json(path)
     print("DONE")
