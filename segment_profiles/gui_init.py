@@ -258,7 +258,6 @@ class ImageViewer(QMainWindow):
         if image_number in self.image_numbers:
             self.current_image = self.load_image(image_number)
             if self.current_image is not None:
-
                 if self.angle != 0:
                     self.current_image = rotate_and_crop_img(
                         self.current_image, self.angle

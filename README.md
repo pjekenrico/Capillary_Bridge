@@ -60,7 +60,7 @@ segment_profiles
 segment_profiles /path/to/your/file.json
 ```
 
-For help or more details about the command-line arguments, you can run:\
+For help or more details about the command-line arguments, you can run:
 
 ```bash
 segment_profiles --help

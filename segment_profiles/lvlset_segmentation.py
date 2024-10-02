@@ -45,13 +45,25 @@ def get_image_numbers(image_files):
     return np.array(image_numbers)
 
 
-def load_image(folder_path, image_number, extension=".tiff"):
-    # Load the image with the specified number
-    filename = f"{image_number:05d}" + extension
-    image_path = os.path.join(folder_path, filename)
-    if os.path.exists(image_path):
-        return plt.imread(image_path)
-    return None
+def segment_indices(numbers):
+    reversed_numbers = np.flip(numbers)
+    idx_to_analyze = [numbers[0]]
+    idx = 0
+    step = 1
+    while idx < len(reversed_numbers):
+        idx_to_analyze.append(reversed_numbers[int(idx)])
+        idx += step
+        if idx >= 499:
+            step = 10
+        if idx >= 999:
+            step = 100
+        if idx >= 1999:
+            step = 1000
+    idx_to_analyze = np.sort(idx_to_analyze)
+    if idx_to_analyze[0] == idx_to_analyze[1]:
+        idx_to_analyze = idx_to_analyze[1:]
+
+    return idx_to_analyze
 
 
 def load_image(folder_path, image_number, extension=".tiff"):
@@ -98,13 +110,14 @@ def run_segmentation(
     paths = get_file_paths(folder_path, extension)
     numbers = get_image_numbers(paths)
 
-    idx_to_analyze = np.arange(np.min(numbers), np.max(numbers), 10)
-    idx_to_analyze = np.append(
-        idx_to_analyze, np.where(numbers > np.max(idx_to_analyze))[0]
-    )
+    idx_to_analyze = segment_indices(numbers)
 
     for idx in idx_to_analyze:
+        print(f"idx= {idx}")
+        print(f"folder_path= {folder_path}")
+        print(f"extension= {extension}")
         orig_img = load_image(folder_path, idx, extension)
+        print(f"\n\n\n\n\ncurrent image is:{orig_img}\n\n\n\n\n")
         orig_img = rotate_and_crop_img(orig_img, angle)
 
         try:
