@@ -37,9 +37,9 @@ def run_segmentation_from_json(json_file: str):
             "alfa": -1,  # coefficient of the weighted area term A(phi)
             "epsilon": 2,  # parameter that specifies the width of the DiracDelta function
             "sigma": 1.5,  # smoothing the image (Gaussian kernel)
-            "tol_contours": 0.5,  # tolerance of the gradient descent method
+            "tol_contours": 2,  # tolerance of the gradient descent method
             "tol_circle": 2,  # tolerance of the gradient descent method
-            "tol_circle_normal": 0.1,  # tolerance of the gradient descent method
+            "tol_circle_normal": 0.05,  # tolerance of the gradient descent method
         }
         boxes, lines, angle, path = preprocess_images(folder_path=".")
 
@@ -53,9 +53,11 @@ def run_segmentation_from_json(json_file: str):
 
     pprint(data)
     write_json(data, json_file)
+    out_file = json_file.replace(".json", "_profiles.npz")
     contact_lines_data = run_segmentation(**data)
-    contact_lines_data.save_data(json_file.replace(".json", ".npz"))
-    
+    contact_lines_data.save_data(out_file)
+    return
+
 
 def main():
     parser = argparse.ArgumentParser(

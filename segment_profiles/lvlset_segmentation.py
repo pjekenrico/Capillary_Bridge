@@ -1,11 +1,11 @@
-import os, re
-import glob
+import os, re, glob
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+
+matplotlib.use("Qt5Agg")
 import numpy as np
 from skimage import measure
-from matplotlib import pyplot as plt
 from skimage.color import rgb2gray
 
 from segment_profiles.interface_check import (
@@ -14,8 +14,6 @@ from segment_profiles.interface_check import (
 )
 from segment_profiles.tools import rotate_and_crop_img, most_common_image_format
 from segment_profiles.find_lsf import find_lsf
-
-matplotlib.use("Qt5Agg")
 
 
 class Dataframe(object):
@@ -51,7 +49,7 @@ class Dataframe(object):
         np.savez_compressed(
             filename,
             metadata=self.metadata,
-            contact_lines=self.contact_lines,
+            contact_lines=np.array(self.contact_lines, dtype=object),
             indices=self.indices,
             circle_positions=self.circle_positions,
         )
@@ -152,7 +150,6 @@ def run_segmentation(
 ) -> Dataframe:
 
     data_frame = Dataframe(folder_path, boxes, lines, angle, segmentation_options)
-    limits = None
 
     plt.ion()
     _, ax = plt.subplots()
@@ -202,12 +199,9 @@ def run_segmentation(
             ax.autoscale(False, axis="y")
 
             if len(contours) < 2:
-                finished = True
                 converged = True
                 print("Reached merging point!")
                 break
-            else:
-                finished = False
 
             if len(contours) == len(boxes):
                 converged = True
@@ -224,7 +218,8 @@ def run_segmentation(
             old_contours = contours
             profiles = []
 
-            for contour in contours:
+            # Reorder contours to have the left one first
+            for contour in sorted(contours, key=lambda x: np.min(x[:, 1])):
                 profile_idx = match_line_with_circle_and_normal(
                     contour,
                     orig_img[lines[0] : lines[-1]],
@@ -237,16 +232,18 @@ def run_segmentation(
                 ax.plot(profile[:, 1], profile[:, 0] + lines[0], linewidth=2)
 
             xc, yc, r = find_circle(orig_img)
-            circle = Circle(
-                (yc, xc), r, facecolor="none", edgecolor=(0, 0.8, 0.8), linewidth=2
-            )
             # Update the left image
-            ax.add_patch(circle)
+            ax.add_patch(
+                Circle(
+                    (yc, xc), r, facecolor="none", edgecolor=(0, 0.8, 0.8), linewidth=2
+                )
+            )
             plt.pause(0.001)
 
             if converged:
-                contact_lines.append(profile)
+                # Reorder profiles to have the left one first
+                profiles = sorted(profiles, key=lambda x: np.min(x[:, 1]))
+                data_frame.add_data(profiles, idx, [xc, yc, r])
                 break
 
-        if finished:
-            return data_frame
+    return data_frame

@@ -78,7 +78,10 @@ def find_circle(img: np.ndarray):
 
     idx = np.where(grad)
 
-    xc, yc, r = fit_circle_2d(idx[0], idx[1], w=[])
+    # Generate weights that are large at the left and right edges and smaller in the middle, eg with a normal distribution
+    w = 1 - np.exp(-((idx[1] - np.mean(idx[1])) ** 2) / (2 * np.std(idx[1]) ** 2))
+
+    xc, yc, r = fit_circle_2d(idx[0], idx[1], w=w)
 
     return xc, yc, r
 

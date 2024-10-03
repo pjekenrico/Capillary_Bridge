@@ -78,6 +78,8 @@ media/
 
 # Ignore test data folder
 test_data/
+*.npz
+*.png
 
 # Ignore IDE-specific files
 .idea/
