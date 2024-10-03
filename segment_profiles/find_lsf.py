@@ -125,7 +125,6 @@ def find_lsf(
     # start level set evolution
     for n in range(iter_outer):
         phi = drlse_edge(phi, g, lmda, mu, alfa, epsilon, timestep, iter_inner)
-        print("Iteration %i time" % n)
         yield phi
 
     # refine the zero level contour by further level set evolution with alfa=0

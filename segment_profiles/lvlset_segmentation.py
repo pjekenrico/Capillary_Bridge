@@ -18,6 +18,54 @@ from segment_profiles.find_lsf import find_lsf
 matplotlib.use("Qt5Agg")
 
 
+class Dataframe(object):
+
+    def __init__(
+        self,
+        folder_path: str,
+        boxes: list[tuple],
+        lines: list,
+        angle: float,
+        segmentation_options: dict,
+    ):
+        self.metadata = {  # metadata
+            "folder_path": folder_path,
+            "boxes": boxes,
+            "lines": lines,
+            "angle": angle,
+            "segmentation_options": segmentation_options,
+        }
+
+        self.contact_lines = []
+        self.indices = []
+        self.circle_positions = []  # [[x,y,r], ... ]
+        return
+
+    def add_data(self, contact_lines, idx, circle_positions):
+        self.contact_lines.append(contact_lines)
+        self.indices.append(idx)
+        self.circle_positions.append(circle_positions)
+        return
+
+    def save_data(self, filename):
+        np.savez_compressed(
+            filename,
+            metadata=self.metadata,
+            contact_lines=self.contact_lines,
+            indices=self.indices,
+            circle_positions=self.circle_positions,
+        )
+        return
+
+    def load_data(self, filename):
+        data = np.load(filename, allow_pickle=True)
+        self.metadata = data["metadata"].item()
+        self.contact_lines = data["contact_lines"]
+        self.indices = data["indices"]
+        self.circle_positions = data["circle_positions"]
+        return
+
+
 def get_file_paths(folder_path, extension=".tiff"):
     # Load all .tiff files in the folder
     image_files = glob.glob(os.path.join(folder_path, "*" + extension))
@@ -53,10 +101,12 @@ def segment_indices(numbers):
     while idx < len(reversed_numbers):
         idx_to_analyze.append(reversed_numbers[int(idx)])
         idx += step
-        if idx >= 499:
-            step = 10
-        if idx >= 999:
+        if idx >= 49:
             step = 100
+        # if idx >= 499:
+        #     step = 100
+        if idx >= 499:
+            step = 300
         if idx >= 1999:
             step = 1000
     idx_to_analyze = np.sort(idx_to_analyze)
@@ -99,9 +149,10 @@ def run_segmentation(
     lines: list,
     angle: float,
     segmentation_options: dict,
-):
+) -> Dataframe:
 
-    contact_lines = []
+    data_frame = Dataframe(folder_path, boxes, lines, angle, segmentation_options)
+    limits = None
 
     plt.ion()
     _, ax = plt.subplots()
@@ -113,11 +164,8 @@ def run_segmentation(
     idx_to_analyze = segment_indices(numbers)
 
     for idx in idx_to_analyze:
-        print(f"idx= {idx}")
-        print(f"folder_path= {folder_path}")
-        print(f"extension= {extension}")
+        print(f"\nidx= {idx}")
         orig_img = load_image(folder_path, idx, extension)
-        print(f"\n\n\n\n\ncurrent image is:{orig_img}\n\n\n\n\n")
         orig_img = rotate_and_crop_img(orig_img, angle)
 
         try:
@@ -169,13 +217,12 @@ def run_segmentation(
                         break
 
                     err = np.linalg.norm(cont - old_cont)
-                    print("Norms:", err)
-
                     if err > segmentation_options["tol_contours"]:
                         converged = False
                         break
                     print("Converged with norms:", err)
             old_contours = contours
+            profiles = []
 
             for contour in contours:
                 profile_idx = match_line_with_circle_and_normal(
@@ -186,7 +233,7 @@ def run_segmentation(
                 )
 
                 profile = contour[profile_idx]
-
+                profiles.append(profile)
                 ax.plot(profile[:, 1], profile[:, 0] + lines[0], linewidth=2)
 
             xc, yc, r = find_circle(orig_img)
@@ -202,4 +249,4 @@ def run_segmentation(
                 break
 
         if finished:
-            return contact_lines
+            return data_frame

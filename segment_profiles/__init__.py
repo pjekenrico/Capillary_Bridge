@@ -53,7 +53,8 @@ def run_segmentation_from_json(json_file: str):
 
     pprint(data)
     write_json(data, json_file)
-    contact_lines = run_segmentation(**data)
+    contact_lines_data = run_segmentation(**data)
+    contact_lines_data.save_data(json_file.replace(".json", ".npz"))
     
 
 def main():
