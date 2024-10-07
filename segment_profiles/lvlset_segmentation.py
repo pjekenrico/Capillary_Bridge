@@ -20,11 +20,12 @@ class Dataframe(object):
 
     def __init__(
         self,
-        folder_path: str,
-        boxes: list[tuple],
-        lines: list,
-        angle: float,
-        segmentation_options: dict,
+        folder_path: str = None,
+        boxes: list[tuple] = None,
+        lines: list = None,
+        angle: float = None,
+        segmentation_options: dict = None,
+        data_path: str = None,
     ):
         self.metadata = {  # metadata
             "folder_path": folder_path,
@@ -37,6 +38,10 @@ class Dataframe(object):
         self.contact_lines = []
         self.indices = []
         self.circle_positions = []  # [[x,y,r], ... ]
+        
+        if data_path:
+            self.load_data(data_path)
+            
         return
 
     def add_data(self, contact_lines, idx, circle_positions):
@@ -101,12 +106,8 @@ def segment_indices(numbers):
         idx += step
         if idx >= 49:
             step = 100
-        # if idx >= 499:
-        #     step = 100
         if idx >= 499:
-            step = 300
-        if idx >= 1999:
-            step = 1000
+            step = 200
     idx_to_analyze = np.sort(idx_to_analyze)
     if idx_to_analyze[0] == idx_to_analyze[1]:
         idx_to_analyze = idx_to_analyze[1:]

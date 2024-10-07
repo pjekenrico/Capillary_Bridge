@@ -6,6 +6,7 @@ def fit_circle_2d(x, y, w=[]):
     """FIT CIRCLE 2D
     - Find center [xc, yc] and radius r of circle fitting to set of 2D points
     - Optionally specify weights for points
+    - Optionally specify known radius r_known
 
     - Implicit circle function:
     (x-xc)^2 + (y-yc)^2 = r^2
@@ -33,6 +34,7 @@ def fit_circle_2d(x, y, w=[]):
     xc = c[0] / 2
     yc = c[1] / 2
     r = np.sqrt(c[2] + xc**2 + yc**2)
+
     return xc, yc, r
 
 
