@@ -1,5 +1,44 @@
 import numpy as np
 from scipy import signal
+from scipy import optimize
+
+
+def optimize_circle_position(
+    pts, xc, yc, r, initial_lr=0.001, num_iterations=1000, decay=0.99
+):
+
+    # Distance error function (vectorized)
+    def dist_err(x_ctr):
+        distances = np.sqrt((pts[0] - x_ctr) ** 2 + (pts[1] - yc) ** 2)
+        return np.sum((distances - r) ** 2)
+
+    # Gradient of the distance error function (vectorized)
+    def grad_dist_err(x_ctr):
+        distances = np.sqrt((pts[0] - x_ctr) ** 2 + (pts[1] - yc) ** 2)
+        nonzero_distances = np.where(distances != 0, distances, np.inf)
+        gradient = 2 * np.sum((distances - r) * (x_ctr - pts[0]) / nonzero_distances)
+        return gradient
+
+    x_ctr = xc
+    learning_rate = initial_lr
+
+    for i in range(num_iterations):
+        grad = grad_dist_err(x_ctr)  # Calculate gradient w.r.t. x_ctr
+        x_ctr = x_ctr - learning_rate * grad  # Update x_ctr
+
+        # Decay learning rate every iteration
+        learning_rate *= decay
+
+        # Optionally, break if gradient change is very small
+        if np.abs(learning_rate * grad) < 1e-6:
+            print(f"Converged after {i+1} iterations.")
+            break
+
+        print(
+            f"Iteration {i+1}, x_ctr: {x_ctr}, Learning Rate: {learning_rate:.6f}, Gradient: {grad:.6f}"
+        )
+
+    return x_ctr
 
 
 def fit_circle_2d(x, y, w=[]):
@@ -81,9 +120,14 @@ def find_circle(img: np.ndarray):
     idx = np.where(grad)
 
     # Generate weights that are large at the left and right edges and smaller in the middle, eg with a normal distribution
-    w = 1 - np.exp(-((idx[1] - np.mean(idx[1])) ** 2) / (2 * np.std(idx[1]) ** 2))
+    std = np.std(idx[1])
+    mu = img.shape[1] / 2
+    w = 1 - np.exp(-0.5 * ((idx[1] - mu) / std) ** 2)
 
     xc, yc, r = fit_circle_2d(idx[0], idx[1], w=w)
+
+    # r = 1880
+    # xc = optimize_circle_position(idx, xc, yc, r)
 
     return xc, yc, r
 

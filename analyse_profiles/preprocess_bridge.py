@@ -1,5 +1,6 @@
 import numpy as np
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
+from scipy.integrate import quad
 import matplotlib.pyplot as plt
 
 
@@ -14,11 +15,10 @@ class Bridge(object):
         res=0.046937338652898376,
         N=100,
     ):
-        self.profile = profile
         self.times = (times - times[0]) / fps
 
         circle_positions = np.array(circle_positions).T
-        self.xc, self.yc, self.r, self.apex = self.check_circle(*circle_positions)
+        self.xc, self.yc, self.r, apex = self.check_circle(*circle_positions)
 
         re_interp = np.zeros((len(times), 2, 2, N))
 
@@ -26,37 +26,165 @@ class Bridge(object):
             for d in range(2):
                 re_interp[i, d] = self.refit_profile(*(profile[i][d].T), N)
 
-        # self.xc *= res
-        # self.yc *= res
-        # self.r *= res
-        # re_interp *= res
-        # self.apex *= res
-        self.R, self.H = self.fit_R_of_ts(re_interp)
+        self.xc *= res
+        self.yc *= res
+        self.r *= res
+        re_interp *= res
+        apex *= res
+
+        # Profiles, where self.R[0] and self.R[0] are the left and right radia as a function of time and position s and self.H[0] and self.H[1] are the heights
+        self.R, self.H, apex = self.fit_R_of_ts(re_interp, apex)
+
+        # Apex height as a function of time
+        self.apex = UnivariateSpline(self.times, apex, k=2)
+
+        self.contact_radius, self.contact_height, self.contact_angle = (
+            self.compute_contact_data(ds=0.02)
+        )
+
+        self.neck_height, self.neck_radius = self.compute_neck_data()
+        self.volume = self.compute_volume()
 
         return
 
+    def compute_contact_data(self, ds=0.02):
+        # Contact angles, s = 1
+        contact_radius = [
+            UnivariateSpline(
+                self.times, np.squeeze(self.R[0](self.times, 1)), k=2, s=0
+            ),
+            UnivariateSpline(
+                self.times, np.squeeze(self.R[1](self.times, 1)), k=2, s=0
+            ),
+        ]
+
+        contact_height = [
+            UnivariateSpline(
+                self.times, np.squeeze(self.H[0](self.times, 1)), k=2, s=0
+            ),
+            UnivariateSpline(
+                self.times, np.squeeze(self.H[1](self.times, 1)), k=2, s=0
+            ),
+        ]
+
+        contact_angle = self.compute_contact_angles(ds=0.02)
+
+        return contact_radius, contact_height, contact_angle
+
+    def compute_neck_data(self, N=100):
+
+        s = np.linspace(0, 1, N)
+
+        neck_idx = [np.argmin(rad(self.times, s), axis=1) for rad in self.R]
+
+        height = [
+            UnivariateSpline(
+                self.times, np.squeeze(rad(self.times, s[neck_idx[k]], grid=False)), s=0
+            )
+            for k, rad in enumerate(self.H)
+        ]
+        radius = [
+            UnivariateSpline(
+                self.times, np.squeeze(rad(self.times, s[neck_idx[k]], grid=False)), s=0
+            )
+            for k, rad in enumerate(self.R)
+        ]
+        return height, radius
+
+    def compute_volume(self):
+
+        volumes = np.zeros((2, len(self.times)))
+        for i, t in enumerate(self.times):
+            for j in range(2):
+
+                # Base integral
+                func = lambda s: np.pi * self.H[j](t, s, dy=1) * self.R[j](t, s) ** 2
+                volumes[j, i] = quad(func, 0, 1)[0]
+
+                # Negative part
+                neg_vol = (
+                    np.pi
+                    / 3
+                    * (self.contact_height[j](t) - self.apex(t)) ** 2
+                    * (3 * self.r - self.contact_height[j](t) + self.apex(t))
+                )
+
+                volumes[j, i] -= neg_vol
+
+        volume_functions = [
+            UnivariateSpline(self.times, vol, k=2, s=0) for vol in volumes
+        ]
+
+        return volume_functions
+
+    def compute_contact_angles(self, ds=0.02):
+
+        contact_radia = np.array([c(self.times, np.array([1 - ds, 1])) for c in self.R])
+
+        contact_heights = np.array([c(self.times, [1 - ds, 1]) for c in self.H])
+
+        contact_angles = np.arctan(
+            (contact_heights[:, :, 1] - contact_heights[:, :, 0])
+            / (contact_radia[:, :, 1] - contact_radia[:, :, 0])
+        )
+
+        contact_angles = np.rad2deg(contact_angles)
+        contact_angles = np.abs(contact_angles)
+        contact_angles = [
+            UnivariateSpline(self.times, angles, k=2, s=0) for angles in contact_angles
+        ]
+
+        return contact_angles
+
+    def plot_profiles_at_time(self, t, N=100):
+        s = np.linspace(0, 1, N)
+
+        plt.figure()
+        plt.plot(
+            np.squeeze(self.R[0](t, s)),
+            np.squeeze(self.H[0](t, s)),
+            label="Left profile",
+        )
+        plt.plot(
+            np.squeeze(self.R[1](t, s)),
+            np.squeeze(self.H[1](t, s)),
+            label="Right profile",
+        )
+        plt.plot(0, self.apex(t), "ro", label="Apex")
+        plt.xlabel("Radius [mm]")
+        plt.ylabel("Height [mm]")
+        plt.axis("equal")
+        plt.grid()
+        plt.legend()
+        # plt.savefig("test.png")
+        plt.show()
+
     def fit_R_of_ts(
-        self, profiles: np.ndarray
+        self, profiles: np.ndarray, apex: np.ndarray
     ) -> list[RectBivariateSpline, RectBivariateSpline]:
 
         s = np.linspace(0, 1, len(profiles[0, 0, 0]))
         R_of_ts = [
             RectBivariateSpline(self.times, s, profiles[:, 0, 1], kx=3, ky=3, s=0),
-            RectBivariateSpline(self.times, s, profiles[:, 1, 1], kx=3, ky=3, s=0),
+            RectBivariateSpline(
+                self.times, s, profiles[:, 1, 1, ::-1], kx=3, ky=3, s=0
+            ),
         ]
 
         h_min = np.max(profiles[:, :, 0])
         profiles[:, :, 0] -= h_min
         profiles[:, :, 0] *= -1
-        self.apex -= h_min
-        self.apex *= -1
+        apex -= h_min
+        apex *= -1
 
         H_of_ts = [
             RectBivariateSpline(self.times, s, profiles[:, 0, 0], kx=3, ky=3, s=0),
-            RectBivariateSpline(self.times, s, profiles[:, 1, 0], kx=3, ky=3, s=0),
+            RectBivariateSpline(
+                self.times, s, profiles[:, 1, 0, ::-1], kx=3, ky=3, s=0
+            ),
         ]
 
-        return R_of_ts, H_of_ts
+        return R_of_ts, H_of_ts, apex
 
     def refit_profile(self, h, R, N):
         s = np.linspace(0, 1, len(h))

@@ -104,10 +104,12 @@ def segment_indices(numbers):
     while idx < len(reversed_numbers):
         idx_to_analyze.append(reversed_numbers[int(idx)])
         idx += step
-        if idx >= 49:
+        if idx >= 10:
+            step = 5
+        if idx >= 100:
+            step = 50
+        if idx >= 200:
             step = 100
-        if idx >= 499:
-            step = 200
     idx_to_analyze = np.sort(idx_to_analyze)
     if idx_to_analyze[0] == idx_to_analyze[1]:
         idx_to_analyze = idx_to_analyze[1:]
@@ -175,7 +177,7 @@ def run_segmentation(
 
         if not "c0" in locals():
             # initialize LSF as binary step function
-            c0 = 2
+            c0 = 3
             initial_lsf = c0 * np.ones(img.shape)
             # generate the initial region R0 as two rectangles
             for box in boxes:
@@ -230,13 +232,13 @@ def run_segmentation(
 
                 profile = contour[profile_idx]
                 profiles.append(profile)
-                ax.plot(profile[:, 1], profile[:, 0] + lines[0], linewidth=2)
+                ax.plot(profile[:, 1], profile[:, 0] + lines[0], linewidth=1)
 
             xc, yc, r = find_circle(orig_img)
             # Update the left image
             ax.add_patch(
                 Circle(
-                    (yc, xc), r, facecolor="none", edgecolor=(0, 0.8, 0.8), linewidth=2
+                    (yc, xc), r, facecolor="none", edgecolor=(0, 0.8, 0.8), linewidth=1
                 )
             )
             plt.pause(0.001)
@@ -244,7 +246,7 @@ def run_segmentation(
             if converged:
                 # Reorder profiles to have the left one first
                 profiles = sorted(profiles, key=lambda x: np.min(x[:, 1]))
-                data_frame.add_data(profiles, idx, [xc, yc, r])
+                data_frame.add_data(profiles, idx, [xc - lines[0], yc, r])
                 break
 
     return data_frame
