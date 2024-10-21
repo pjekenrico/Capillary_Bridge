@@ -33,7 +33,7 @@ class Bridge(object):
         apex *= res
 
         # Profiles, where self.R[0] and self.R[0] are the left and right radia as a function of time and position s and self.H[0] and self.H[1] are the heights
-        self.R, self.H, apex = self.fit_R_of_ts(re_interp, apex)
+        self.R, self.H, apex, self.dR, self.dH = self.fit_R_of_ts(re_interp, apex)
 
         # Apex height as a function of time
         self.apex = UnivariateSpline(self.times, apex, k=2)
@@ -92,7 +92,6 @@ class Bridge(object):
         return height, radius
 
     def compute_volume(self):
-
         volumes = np.zeros((2, len(self.times)))
         for i, t in enumerate(self.times):
             for j in range(2):
@@ -150,7 +149,11 @@ class Bridge(object):
             np.squeeze(self.H[1](t, s)),
             label="Right profile",
         )
-        plt.plot(0, self.apex(t), "ro", label="Apex")
+        plt.plot(0, self.apex(t), "o", label="Apex")
+        plt.plot(self.neck_radius[0](t), self.neck_height[0](t), "o", label="Left neck")
+        plt.plot(
+            self.neck_radius[1](t), self.neck_height[1](t), "o", label="Right neck"
+        )
         plt.xlabel("Radius [mm]")
         plt.ylabel("Height [mm]")
         plt.axis("equal")
@@ -184,7 +187,10 @@ class Bridge(object):
             ),
         ]
 
-        return R_of_ts, H_of_ts, apex
+        dR_dt_of_ts = [r.partial_derivative(dx=1, dy=0) for r in R_of_ts]
+        dH_dt_of_ts = [h.partial_derivative(dx=1, dy=0) for h in H_of_ts]
+
+        return R_of_ts, H_of_ts, apex, dR_dt_of_ts, dH_dt_of_ts
 
     def refit_profile(self, h, R, N):
         s = np.linspace(0, 1, len(h))

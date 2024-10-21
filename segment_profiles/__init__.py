@@ -36,7 +36,7 @@ def run_segmentation_from_json(json_file: str):
             "lmda": 4,  # coefficient of the weighted length term L(phi)
             "alfa": -1,  # coefficient of the weighted area term A(phi)
             "epsilon": 2,  # parameter that specifies the width of the DiracDelta function
-            "sigma": 1.5,  # smoothing the image (Gaussian kernel)
+            "sigma": 0.5,  # smoothing the image (Gaussian kernel)
             "tol_contours": 2,  # tolerance of the gradient descent method
             "tol_circle": 2,  # tolerance of the gradient descent method
             "tol_circle_normal": 0.05,  # tolerance of the gradient descent method
