@@ -1,7 +1,8 @@
-import os
+import os, glob
 import numpy as np
 from skimage import transform
 from collections import Counter
+import matplotlib.pyplot as plt
 
 
 def rotate_and_crop_img(image: np.ndarray, angle: float | int) -> np.ndarray:
@@ -64,3 +65,32 @@ def most_common_image_format(folder_path):
     most_common_ext = Counter(extensions).most_common(1)[0][0]
 
     return most_common_ext
+
+
+def load_image(
+    folder_path: str, image_number: int, extension: str = ".tiff"
+) -> np.ndarray | None:
+    # Format the number with leading zeros (e.g., 00001)
+    number_str = f"{image_number:05d}"
+    image_files = glob.glob(os.path.join(folder_path, "*" + extension))
+
+    # Find the file that matches the pattern imageseriesname_00001.<extension>
+    matching_files = [f for f in image_files if f"_{number_str}" in os.path.basename(f)]
+
+    if not matching_files:
+        number_str = f"{image_number:04d}"
+
+        # Find the file that matches the pattern imageseriesname_00001.<extension>
+        matching_files = [
+            f for f in image_files if f"_{number_str}" in os.path.basename(f)
+        ]
+
+    if matching_files:
+        # Use the first matching file (in case there are multiple)
+        image_path = os.path.join(folder_path, matching_files[0])
+
+        # Check if the file exists and load the image
+        if os.path.exists(image_path):
+            return plt.imread(image_path)
+
+    return None

@@ -9,10 +9,15 @@ from skimage import measure
 from skimage.color import rgb2gray
 
 from segment_profiles.interface_check import (
-    find_circle,
     match_line_with_circle_and_normal,
+    preprocess_circle,
+    postprocess_contact_line,
 )
-from segment_profiles.tools import rotate_and_crop_img, most_common_image_format
+from segment_profiles.tools import (
+    rotate_and_crop_img,
+    most_common_image_format,
+    load_image,
+)
 from segment_profiles.find_lsf import find_lsf
 
 
@@ -38,19 +43,21 @@ class Dataframe(object):
         self.contact_lines = []
         self.indices = []
         self.circle_positions = []  # [[x,y,r], ... ]
-        
+
         if data_path:
             self.load_data(data_path)
-            
+
         return
 
-    def add_data(self, contact_lines, idx, circle_positions):
+    def add_data(
+        self, contact_lines: list[np.ndarray], idx: int, circle_positions: list[float]
+    ):
         self.contact_lines.append(contact_lines)
         self.indices.append(idx)
         self.circle_positions.append(circle_positions)
         return
 
-    def save_data(self, filename):
+    def save_data(self, filename: str):
         np.savez_compressed(
             filename,
             metadata=self.metadata,
@@ -60,7 +67,7 @@ class Dataframe(object):
         )
         return
 
-    def load_data(self, filename):
+    def load_data(self, filename: str):
         data = np.load(filename, allow_pickle=True)
         self.metadata = data["metadata"].item()
         self.contact_lines = data["contact_lines"]
@@ -69,13 +76,13 @@ class Dataframe(object):
         return
 
 
-def get_file_paths(folder_path, extension=".tiff"):
+def get_file_paths(folder_path: str, extension: str = ".tiff"):
     # Load all .tiff files in the folder
     image_files = glob.glob(os.path.join(folder_path, "*" + extension))
     return sorted(image_files)
 
 
-def get_image_numbers(image_files):
+def get_image_numbers(image_files: list[str]) -> np.ndarray:
     # Extract image numbers from filenames
     image_numbers = []
 
@@ -96,54 +103,6 @@ def get_image_numbers(image_files):
     return np.array(image_numbers)
 
 
-def segment_indices(numbers):
-    reversed_numbers = np.flip(numbers)
-    idx_to_analyze = [numbers[0]]
-    idx = 0
-    step = 1
-    while idx < len(reversed_numbers):
-        idx_to_analyze.append(reversed_numbers[int(idx)])
-        idx += step
-        if idx >= 10:
-            step = 5
-        if idx >= 100:
-            step = 50
-        if idx >= 200:
-            step = 100
-    idx_to_analyze = np.sort(idx_to_analyze)
-    if idx_to_analyze[0] == idx_to_analyze[1]:
-        idx_to_analyze = idx_to_analyze[1:]
-
-    return idx_to_analyze
-
-
-def load_image(folder_path, image_number, extension=".tiff"):
-    # Format the number with leading zeros (e.g., 00001)
-    number_str = f"{image_number:05d}"
-    image_files = glob.glob(os.path.join(folder_path, "*" + extension))
-
-    # Find the file that matches the pattern imageseriesname_00001.<extension>
-    matching_files = [f for f in image_files if f"_{number_str}" in os.path.basename(f)]
-
-    if not matching_files:
-        number_str = f"{image_number:04d}"
-
-        # Find the file that matches the pattern imageseriesname_00001.<extension>
-        matching_files = [
-            f for f in image_files if f"_{number_str}" in os.path.basename(f)
-        ]
-
-    if matching_files:
-        # Use the first matching file (in case there are multiple)
-        image_path = os.path.join(folder_path, matching_files[0])
-
-        # Check if the file exists and load the image
-        if os.path.exists(image_path):
-            return plt.imread(image_path)
-
-    return None
-
-
 def run_segmentation(
     folder_path: str,
     boxes: list[tuple],
@@ -159,11 +118,12 @@ def run_segmentation(
 
     extension = most_common_image_format(folder_path)
     paths = get_file_paths(folder_path, extension)
-    numbers = get_image_numbers(paths)
+    idx_to_analyze = get_image_numbers(paths)
 
-    idx_to_analyze = segment_indices(numbers)
+    # idx_to_analyze = segment_indices(numbers)
+    x, yc, r = preprocess_circle(folder_path, idx_to_analyze, extension, angle, lines)
 
-    for idx in idx_to_analyze:
+    for idx, xc in zip(idx_to_analyze, x):
         print(f"\nidx= {idx}")
         orig_img = load_image(folder_path, idx, extension)
         orig_img = rotate_and_crop_img(orig_img, angle)
@@ -184,7 +144,7 @@ def run_segmentation(
                 initial_lsf[box[1] : box[-1], box[0] : box[2]] = -c0
             initial_lsf = initial_lsf[lines[0] : lines[-1]]
         else:
-            initial_lsf = phi
+            initial_lsf = 2 * c0 / np.pi * np.arctan(phi)
 
         img = np.interp(img, [np.min(img), np.max(img)], [0, 255])
         old_contours = np.inf * np.ones_like(boxes)
@@ -228,17 +188,29 @@ def run_segmentation(
                     orig_img[lines[0] : lines[-1]],
                     epsilon=segmentation_options["tol_circle"],
                     normal_tolerance=segmentation_options["tol_circle_normal"],
+                    circle_data=(xc, yc, r),
+                )
+
+                postprocess_contact_line(
+                    contour,
+                    orig_img[lines[0] : lines[-1]],
+                    epsilon=segmentation_options["tol_circle"],
+                    normal_tolerance=segmentation_options["tol_circle_normal"],
+                    circle_data=(xc, yc, r),
                 )
 
                 profile = contour[profile_idx]
                 profiles.append(profile)
                 ax.plot(profile[:, 1], profile[:, 0] + lines[0], linewidth=1)
 
-            xc, yc, r = find_circle(orig_img)
             # Update the left image
             ax.add_patch(
                 Circle(
-                    (yc, xc), r, facecolor="none", edgecolor=(0, 0.8, 0.8), linewidth=1
+                    (yc, xc + lines[0]),
+                    r,
+                    facecolor="none",
+                    edgecolor=(0, 0.8, 0.8),
+                    linewidth=1,
                 )
             )
             plt.pause(0.001)

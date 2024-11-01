@@ -30,16 +30,16 @@ def run_segmentation_from_json(json_file: str):
         data = read_json(json_file)
     except FileNotFoundError:
         segmentation_options = {
-            "timestep": 2,  # time step
-            "iter_inner": 10,  # number of iterations of the level set evolution in the inner loop
-            "iter_outer": 400,  # number of iterations of the level set evolution in the outer loop
-            "lmda": 4,  # coefficient of the weighted length term L(phi)
-            "alfa": -1,  # coefficient of the weighted area term A(phi)
-            "epsilon": 2,  # parameter that specifies the width of the DiracDelta function
-            "sigma": 0.5,  # smoothing the image (Gaussian kernel)
-            "tol_contours": 2,  # tolerance of the gradient descent method
-            "tol_circle": 2,  # tolerance of the gradient descent method
-            "tol_circle_normal": 0.05,  # tolerance of the gradient descent method
+            "timestep": 3,
+            "iter_inner": 10,
+            "iter_outer": 400,
+            "lmda": 2,
+            "alfa": -2,
+            "epsilon": 1.5,
+            "sigma": 0.5,
+            "tol_contours": 5,
+            "tol_circle": 5,
+            "tol_circle_normal": 0.05,
         }
         boxes, lines, angle, path = preprocess_images(folder_path=".")
 

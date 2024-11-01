@@ -1,6 +1,8 @@
 import numpy as np
 from scipy import signal
-from scipy import optimize
+from scipy import optimize, stats
+
+from segment_profiles.tools import load_image, rotate_and_crop_img, plt
 
 
 def optimize_circle_position(
@@ -126,14 +128,11 @@ def find_circle(img: np.ndarray):
 
     xc, yc, r = fit_circle_2d(idx[0], idx[1], w=w)
 
-    # r = 1880
-    # xc = optimize_circle_position(idx, xc, yc, r)
-
     return xc, yc, r
 
 
 def match_line_with_circle_and_normal(
-    interface_points, img, epsilon=2, normal_tolerance=0.1
+    interface_points, img, epsilon=2, normal_tolerance=0.1, circle_data: list = None
 ):
     """
     Identify which parts of the interface line match well with the circle, including normal direction checks using numpy.
@@ -149,7 +148,10 @@ def match_line_with_circle_and_normal(
     - matches: List of booleans [True, False, ...] indicating whether each point matches with the circle considering both distance and normal alignment.
     """
 
-    xc, yc, r = find_circle(img)
+    if circle_data is None:
+        xc, yc, r = find_circle(img)
+    else:
+        xc, yc, r = circle_data
     circle_center = np.array([xc, yc])
 
     # Convert inputs to numpy arrays
@@ -192,3 +194,105 @@ def match_line_with_circle_and_normal(
     matches = np.logical_not(distance_match & normal_match)
 
     return matches
+
+
+def preprocess_circle(
+    folder_path: str,
+    idx_to_analyze: np.ndarray[int],
+    extension: str,
+    angle: float,
+    lines: np.ndarray,
+):
+    """
+    Preprocess the circle data and save it to a file.
+
+    Parameters:
+    - folder_path: The path to the folder containing the images.
+    - idx_to_analyze: The indices of the images to analyze.
+    - extension: The extension of the images.
+    - angle: The angle of the images.
+
+    Returns:
+    - None
+    """
+
+    # Load the images
+    images = []
+    for idx in idx_to_analyze:
+        image = load_image(folder_path, idx, extension)
+        image = rotate_and_crop_img(image, angle)
+        images.append(image[lines[0] : lines[-1]])
+    images = np.array(images)
+
+    # Find the circle centers
+    circle_centers = []
+    for image in images:
+        xc, yc, r = find_circle(image)
+        circle_centers.append([xc, yc, r])
+
+    # Save the circle data
+    circle_data = np.array(circle_centers)
+
+    # np.savez_compressed("circle_data.npz", circle_data=circle_data)
+
+    x = circle_data[:, 2] - np.mean(circle_data[:, 2]) + circle_data[:, 0]
+    y = np.mean(circle_data[:, 1])
+    r = np.mean(circle_data[:, 2])
+    stat = stats.linregress(idx_to_analyze, x)
+    x = stat.slope * idx_to_analyze + stat.intercept
+
+    return x, y, r
+
+
+def compute_curvature(x, y):
+    """
+    Compute the curvature and curvature direction at each point of a 2D curve.
+    
+    Parameters:
+    x (array-like): x-coordinates of the curve points.
+    y (array-like): y-coordinates of the curve points.
+
+    Returns:
+    curvature (np.ndarray): Curvature at each point.
+    curvature_direction (np.ndarray): Curvature direction as a unit vector at each point.
+    """
+
+    # Convert input to numpy arrays
+    x = np.asarray(x)
+    y = np.asarray(y)
+    
+    # First derivatives using central difference
+    dx = (np.roll(x, -1) - np.roll(x, 1)) / 2
+    dy = (np.roll(y, -1) - np.roll(y, 1)) / 2
+    
+    # Second derivatives using central difference
+    ddx = np.roll(x, -1) - 2 * x + np.roll(x, 1)
+    ddy = np.roll(y, -1) - 2 * y + np.roll(y, 1)
+    
+    # Compute curvature
+    curvature = (dx * ddy - dy * ddx) / (dx**2 + dy**2)**(3/2)
+    
+    # Compute the curvature direction as a unit normal vector
+    norm = np.sqrt(dx**2 + dy**2)
+    curvature_direction = np.column_stack((-dy / norm, dx / norm))
+    
+    return curvature, curvature_direction
+
+
+def postprocess_contact_line(
+    interface_points, img, epsilon=2, normal_tolerance=0.1, circle_data: list = None
+):
+    
+    idx = match_line_with_circle_and_normal(interface_points, img, epsilon, normal_tolerance, circle_data)
+    
+    x,y,r = circle_data
+    
+    curvature, curv_dir = compute_curvature(*interface_points.T)
+    
+    if y > np.mean(interface_points[idx][:,1]): # Left
+        pass
+    else: # Right
+        pass
+        
+
+    pass
