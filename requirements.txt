@@ -1,5 +1,0 @@
-numpy==1.21.0              # For numerical computations
-scipy==1.7.0               # For signal processing, filters, etc.
-matplotlib==3.4.3          # For plotting and widgets
-PyQt5==5.15.4              # For GUI creation (Qt framework)
-scikit-image==0.18.3       # For image processing
