@@ -43,7 +43,10 @@ class Bridge(object):
         )
 
         self.neck_height, self.neck_radius = self.compute_neck_data()
-        self.volume = self.compute_volume()
+
+        # self.volume = self.compute_volume()
+
+        self.curvature = self.compute_curvature()
 
         return
 
@@ -224,3 +227,40 @@ class Bridge(object):
             )
 
         return xc, y, r, apex
+
+    def compute_curvature(self):
+
+        # Reinterpolate the derivatives to have a smoother curvature
+        t = self.times
+        s = np.linspace(0, 1, 100)
+
+        dx = [
+            RectBivariateSpline(t, s, self.R[0](t, s, dy=1)),
+            RectBivariateSpline(t, s, self.R[1](t, s, dy=1)),
+        ]
+
+        ddx = [
+            RectBivariateSpline(t, s, dx[0](t, s, dy=1)),
+            RectBivariateSpline(t, s, dx[1](t, s, dy=1)),
+        ]
+
+        dy = [
+            RectBivariateSpline(t, s, self.H[0](t, s, dy=1)),
+            RectBivariateSpline(t, s, self.H[1](t, s, dy=1)),
+        ]
+
+        ddy = [
+            RectBivariateSpline(t, s, dy[0](t, s, dy=1)),
+            RectBivariateSpline(t, s, dy[1](t, s, dy=1)),
+        ]
+
+        curvature = []
+        for i in range(2):
+            curvature.append(
+                lambda t, s: np.abs(
+                    (dx[i](t, s) * ddy[i](t, s) - dy[i](t, s) * ddx[i](t, s))
+                    / ((dx[i](t, s) ** 2 + dy[i](t, s) ** 2) ** 1.5)
+                )
+            )
+
+        return curvature

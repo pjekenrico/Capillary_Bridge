@@ -80,7 +80,7 @@ def load_image(
     if not matching_files:
         number_str = f"{image_number:04d}"
 
-        # Find the file that matches the pattern imageseriesname_00001.<extension>
+        # Find the file that matches the pattern imageseriesname_0001.<extension>
         matching_files = [
             f for f in image_files if f"_{number_str}" in os.path.basename(f)
         ]
