@@ -1,6 +1,6 @@
 import numpy as np
 from scipy import signal
-from scipy import optimize, stats
+from scipy import stats
 
 from segment_profiles.tools import load_image, rotate_and_crop_img, plt
 

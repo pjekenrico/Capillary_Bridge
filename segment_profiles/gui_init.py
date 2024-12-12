@@ -4,7 +4,7 @@ import glob, re
 import matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
-from PyQt5.QtWidgets import (
+from PyQt6.QtWidgets import (
     QApplication,
     QMainWindow,
     QVBoxLayout,
@@ -454,13 +454,6 @@ class ImageViewer(QMainWindow):
         if self.selected_height2 is not None:
             self.ax.axhline(self.selected_height2, color="red", linewidth=2)
         self.fig.canvas.draw()
-
-    # # Option 1: Override the closeEvent and use sys.exit()
-    # def closeEvent(self, event):
-    #     print("Window is closing, exiting application.")
-    #     event.accept()  # Accept the event to close the window
-    #     sys.exit()  # Exit the entire program
-
 
 def preprocess_images(folder_path: str) -> dict:
     app = QApplication(sys.argv)
