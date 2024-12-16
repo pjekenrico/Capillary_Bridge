@@ -4,7 +4,6 @@ from skimage import transform
 from collections import Counter
 import matplotlib.pyplot as plt
 
-
 def rotate_and_crop_img(image: np.ndarray, angle: float | int) -> np.ndarray:
     # Get image dimensions
     (h, w) = image.shape[:2]
@@ -85,6 +84,14 @@ def load_image(
             f for f in image_files if f"_{number_str}" in os.path.basename(f)
         ]
 
+    if not matching_files:
+        number_str = f"{image_number:03d}"
+
+        # Find the file that matches the pattern imageseriesname_0001.<extension>
+        matching_files = [
+            f for f in image_files if f"_{number_str}" in os.path.basename(f)
+        ]
+
     if matching_files:
         # Use the first matching file (in case there are multiple)
         image_path = os.path.join(folder_path, matching_files[0])
@@ -94,3 +101,37 @@ def load_image(
             return plt.imread(image_path)
 
     return None
+
+
+def clip_and_normalize(image, min_val, max_val):
+    """
+    Clips the pixel values of an image to a specified range and normalizes it to 0-255.
+    Automatically handles images in [0, 1] float format by converting them to uint8.
+
+    Parameters:
+    - image (np.ndarray): Input image (grayscale or single channel).
+    - min_val (int): Minimum pixel value threshold.
+    - max_val (int): Maximum pixel value threshold.
+
+    Returns:
+    - np.ndarray: The processed image with values normalized to 0-255.
+    """
+    # Check if the image is in float format [0, 1] and convert to uint8
+    if image.dtype == np.float32 or image.dtype == np.float64:
+        if image.max() <= 1.0 and image.min() >= 0.0:
+            image = (image * 255).astype(np.uint8)
+
+    # Clip values outside the range
+    clipped_image = np.clip(image, min_val, max_val)
+    
+    # Avoid division by zero
+    if max_val > min_val:
+        # Normalize to 0-255 range
+        normalized_image = (
+            ((clipped_image - min_val) / (max_val - min_val)) * 255
+        ).astype(np.uint8)
+    else:
+        # If range is invalid, return a zeroed image
+        normalized_image = np.zeros_like(image, dtype=np.uint8)
+
+    return normalized_image

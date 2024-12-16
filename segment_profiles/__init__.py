@@ -3,7 +3,10 @@
 import json, argparse, os
 from pprint import pprint
 
-from segment_profiles.lvlset_segmentation import run_segmentation
+from segment_profiles.lvlset_segmentation import run_segmentation as circ_segmnetation
+from segment_profiles.lvlset_segmentation_flat import (
+    run_segmentation as flat_segmentation,
+)
 from segment_profiles.gui_init import preprocess_images
 
 
@@ -24,7 +27,7 @@ def write_json(data: dict, json_file: str) -> None:
     return
 
 
-def run_segmentation_from_json(json_file: str):
+def run_segmentation_from_json(json_file: str, circle=True):
 
     try:
         data = read_json(json_file)
@@ -41,20 +44,26 @@ def run_segmentation_from_json(json_file: str):
             "tol_circle": 5,
             "tol_circle_normal": 0.05,
         }
-        boxes, lines, angle, path = preprocess_images(folder_path=".")
+        boxes, lines, angle, path, flat_top = preprocess_images(folder_path=".")
 
         data = {
             "folder_path": path,
             "boxes": boxes,
             "lines": lines,
             "angle": angle,
+            "flat_top": flat_top,
             "segmentation_options": segmentation_options,
         }
 
     pprint(data)
     write_json(data, json_file)
     out_file = json_file.replace(".json", "_profiles.npz")
-    contact_lines_data = run_segmentation(**data)
+
+    if data["flat_top"]:
+        contact_lines_data = flat_segmentation(**data)
+    else:
+        contact_lines_data = circ_segmnetation(**data)
+
     contact_lines_data.save_data(out_file)
     return
 

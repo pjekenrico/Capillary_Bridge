@@ -7,25 +7,23 @@ def drlse_edge(
 ):  # Updated Level Set Function
     """
 
-        :param phi_0: level set function to be updated by level set evolution
-        :param g: edge indicator function
-        :param lmda: weight of the weighted length term
-        :param mu: weight of distance regularization term
-        :param alfa: weight of the weighted area term
-        :param epsilon: width of Dirac Delta function
-        :param timestep: time step
-        :param iters: number of iterations
+    :param phi_0: level set function to be updated by level set evolution
+    :param g: edge indicator function
+    :param lmda: weight of the weighted length term
+    :param mu: weight of distance regularization term
+    :param alfa: weight of the weighted area term
+    :param epsilon: width of Dirac Delta function
+    :param timestep: time step
+    :param iters: number of iterations
     """
     phi = phi_0.copy()
     [vy, vx] = np.gradient(g)
     for k in range(iters):
-        phi = neumann_bound_cond(phi)
+        # phi = neumann_bound_cond(phi)
         [phi_y, phi_x] = np.gradient(phi)
         s = np.sqrt(np.square(phi_x) + np.square(phi_y))
         delta = 1e-10
-        n_x = phi_x / (
-            s + delta
-        )  # add a small positive number to avoid division by zero
+        n_x = phi_x / (s + delta)
         n_y = phi_y / (s + delta)
         curvature = div(n_x, n_y)
         dist_reg_term = dist_reg_p2(phi)
@@ -60,7 +58,7 @@ def div(nx: np.ndarray, ny: np.ndarray) -> np.ndarray:
 
 
 def dirac(x: np.ndarray, sigma: np.ndarray) -> np.ndarray:
-    f = (1 / 2 / sigma) * (1 + np.cos(np.pi * x / sigma))
+    f = (0.5 / sigma) * (1 + np.cos(np.pi * x / sigma))
     b = (x <= sigma) & (x >= -sigma)
     return f * b
 
@@ -99,7 +97,6 @@ def find_lsf(
     :param alfa: coefficient of the weighted area term A(phi)
     :param epsilon: parameter that specifies the width of the DiracDelta function
     :param sigma: scale parameter in Gaussian kernal
-    :param potential_function: The potential function to use in drlse algorithm. Should be SINGLE_WELL or DOUBLE_WELL
     """
     if len(img.shape) != 2:
         raise Exception("Input image should be a gray scale one")

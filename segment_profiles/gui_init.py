@@ -1,10 +1,7 @@
-import sys
-import os
-import glob, re
-import matplotlib
+import os, sys, glob, re, matplotlib
 import matplotlib.pyplot as plt
 from matplotlib.widgets import RectangleSelector
-from PyQt6.QtWidgets import (
+from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
     QVBoxLayout,
@@ -13,10 +10,14 @@ from PyQt6.QtWidgets import (
     QLabel,
     QPushButton,
     QHBoxLayout,
-    QFileDialog,  # Add this line
+    QFileDialog,
+    QCheckBox,
 )
-from segment_profiles.tools import rotate_and_crop_img, most_common_image_format
-
+import numpy as np
+from segment_profiles.tools import (
+    rotate_and_crop_img,
+    most_common_image_format,
+)
 
 matplotlib.use("Qt5Agg")
 
@@ -43,6 +44,7 @@ class ImageViewer(QMainWindow):
             "heights": [self.selected_height, self.selected_height2],
         }
         self.angle = 0
+        self.flat_top = False
         self.initUI()
 
     def load_image_files(self):
@@ -80,6 +82,14 @@ class ImageViewer(QMainWindow):
 
         if not matching_files:
             number_str = f"{image_number:04d}"
+
+            # Find the file that matches the pattern imageseriesname_00001.<extension>
+            matching_files = [
+                f for f in self.image_files if f"_{number_str}" in os.path.basename(f)
+            ]
+
+        if not matching_files:
+            number_str = f"{image_number:03d}"
 
             # Find the file that matches the pattern imageseriesname_00001.<extension>
             matching_files = [
@@ -180,6 +190,11 @@ class ImageViewer(QMainWindow):
             box_layout.addWidget(box_input)
             layout.addLayout(box_layout)
 
+        # Add a checkbox for Flat Top
+        self.flat_top_checkbox = QCheckBox("Flat top", self)
+        self.flat_top_checkbox.stateChanged.connect(self.update_flat_top)
+        layout.addWidget(self.flat_top_checkbox)
+
         # Add a button to select the height
         height_layout = QHBoxLayout()
         height_button = QPushButton("Set Height", self)
@@ -236,6 +251,9 @@ class ImageViewer(QMainWindow):
         self.setWindowTitle("Single Image Viewer")
         self.show()
 
+    def update_flat_top(self, state):
+        self.flat_top = bool(state)
+
     def update_angle(self):
         try:
             self.angle = float(self.angle_input.text())
@@ -258,17 +276,30 @@ class ImageViewer(QMainWindow):
         if image_number in self.image_numbers:
             self.current_image = self.load_image(image_number)
             if self.current_image is not None:
+                # Ensure the image is grayscale
+                if (
+                    len(self.current_image.shape) == 3
+                    and self.current_image.shape[2] == 3
+                ):
+                    # Convert to grayscale by averaging RGB channels
+                    self.current_image = self.current_image.mean(axis=2).astype(
+                        np.uint8
+                    )
+
+                # Apply rotation and cropping if necessary
                 if self.angle != 0:
                     self.current_image = rotate_and_crop_img(
                         self.current_image, self.angle
                     )
 
+                # Update the plot
                 self.ax.cla()  # Clear the current axes
                 self.ax.imshow(
                     self.current_image, cmap="gray"
-                )  # Show the selected image
+                )  # Show the processed image
                 self.ax.axis("off")  # Hide axes
                 self.fig.tight_layout()
+
                 # Draw existing boxes if any
                 self.draw_boxes()
                 self.draw_line()
@@ -356,6 +387,7 @@ class ImageViewer(QMainWindow):
             "boxes": self.marked_boxes,
             "heights": sorted([self.selected_height, self.selected_height2]),
             "angle": self.angle,
+            "flat_top": self.flat_top,
         }
 
         self.close()
@@ -455,6 +487,7 @@ class ImageViewer(QMainWindow):
             self.ax.axhline(self.selected_height2, color="red", linewidth=2)
         self.fig.canvas.draw()
 
+
 def preprocess_images(folder_path: str) -> dict:
     app = QApplication(sys.argv)
     viewer = ImageViewer(folder_path)
@@ -463,4 +496,10 @@ def preprocess_images(folder_path: str) -> dict:
     # After the window is closed, get the result
     result = viewer.get_result()
 
-    return result["boxes"], result["heights"], result["angle"], viewer.folder_path
+    return (
+        result["boxes"],
+        result["heights"],
+        result["angle"],
+        viewer.folder_path,
+        viewer.flat_top,
+    )

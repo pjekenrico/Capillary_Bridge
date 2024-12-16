@@ -2,7 +2,7 @@ import numpy as np
 from scipy import signal
 from scipy import stats
 
-from segment_profiles.tools import load_image, rotate_and_crop_img, plt
+from segment_profiles.tools import load_image, rotate_and_crop_img
 
 
 def optimize_circle_position(
@@ -247,7 +247,7 @@ def preprocess_circle(
 def compute_curvature(x, y):
     """
     Compute the curvature and curvature direction at each point of a 2D curve.
-    
+
     Parameters:
     x (array-like): x-coordinates of the curve points.
     y (array-like): y-coordinates of the curve points.
@@ -260,39 +260,59 @@ def compute_curvature(x, y):
     # Convert input to numpy arrays
     x = np.asarray(x)
     y = np.asarray(y)
-    
+
     # First derivatives using central difference
     dx = (np.roll(x, -1) - np.roll(x, 1)) / 2
     dy = (np.roll(y, -1) - np.roll(y, 1)) / 2
-    
+
     # Second derivatives using central difference
     ddx = np.roll(x, -1) - 2 * x + np.roll(x, 1)
     ddy = np.roll(y, -1) - 2 * y + np.roll(y, 1)
-    
+
     # Compute curvature
-    curvature = (dx * ddy - dy * ddx) / (dx**2 + dy**2)**(3/2)
-    
+    curvature = (dx * ddy - dy * ddx) / (dx**2 + dy**2) ** (3 / 2)
+
     # Compute the curvature direction as a unit normal vector
     norm = np.sqrt(dx**2 + dy**2)
     curvature_direction = np.column_stack((-dy / norm, dx / norm))
-    
+
     return curvature, curvature_direction
 
 
-def postprocess_contact_line(
-    interface_points, img, epsilon=2, normal_tolerance=0.1, circle_data: list = None
-):
+def find_line(img: np.ndarray) -> float:
     
-    idx = match_line_with_circle_and_normal(interface_points, img, epsilon, normal_tolerance, circle_data)
-    
-    x,y,r = circle_data
-    
-    curvature, curv_dir = compute_curvature(*interface_points.T)
-    
-    if y > np.mean(interface_points[idx][:,1]): # Left
-        pass
-    else: # Right
-        pass
-        
+    # Define the Scharr operator for a gradients in the height axis
+    scharr = np.array([[3, 10, 3], [0, 0, 0], [-3, -10, -3]])
+    grad = signal.convolve2d(img, scharr, boundary="symm", mode="same")
+    xc = np.argmax(np.mean(grad, axis=1))    
+    return xc
 
-    pass
+
+def preprocess_line(
+    folder_path: str,
+    idx_to_analyze: np.ndarray[int],
+    extension: str,
+    angle: float,
+    lines: np.ndarray,
+):
+    """
+    Preprocess the circle data and save it to a file.
+
+    Parameters:
+    - folder_path: The path to the folder containing the images.
+    - idx_to_analyze: The indices of the images to analyze.
+    - extension: The extension of the images.
+    - angle: The angle of the images.
+
+    Returns:
+    - None
+    """
+
+    # Load the images and find the line heights
+    plate_height = []
+    for idx in idx_to_analyze:
+        image = load_image(folder_path, idx, extension)
+        image = rotate_and_crop_img(image, angle)
+        plate_height.append(find_line(image[lines[0] : lines[-1]]))
+
+    return np.array(plate_height)
