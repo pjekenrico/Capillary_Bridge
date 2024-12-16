@@ -8,17 +8,27 @@ class Bridge(object):
 
     def __init__(
         self,
-        profile,
-        times,
-        circle_positions,
-        fps=5000,
-        res=0.046937338652898376,
-        N=100,
+        profile: list[np.ndarray],
+        times: np.ndarray,
+        circle_positions: np.ndarray,
+        line_positions: np.ndarray = None,
+        fps: int = 5000,
+        res: float = 0.046937338652898376,
+        N: int = 100,
     ):
         self.times = (times - times[0]) / fps
 
-        circle_positions = np.array(circle_positions).T
-        self.xc, self.yc, self.r, apex = self.check_circle(*circle_positions)
+        if line_positions is None:
+            circle_positions = np.array(circle_positions).T
+            self.xc, self.yc, self.r, apex = self.check_circle(*circle_positions)
+        else:
+            self.xc = line_positions
+            x_max_left = np.max([np.max(profile[i][0][0]) for i in range(len(profile))])
+            x_min_right = np.min([np.min(profile[i][1][0]) for i in range(len(profile))])
+            
+            self.yc = np.mean(x_max_left + x_min_right) / 2
+            self.r = None
+            apex = None
 
         re_interp = np.zeros((len(times), 2, 2, N))
 
@@ -44,13 +54,13 @@ class Bridge(object):
 
         self.neck_height, self.neck_radius = self.compute_neck_data()
 
-        # self.volume = self.compute_volume()
+        self.volume = self.compute_volume()
 
         self.curvature = self.compute_curvature()
 
         return
 
-    def compute_contact_data(self, ds=0.02):
+    def compute_contact_data(self):
         # Contact angles, s = 1
         contact_radius = [
             UnivariateSpline(
@@ -103,15 +113,15 @@ class Bridge(object):
                 func = lambda s: np.pi * self.H[j](t, s, dy=1) * self.R[j](t, s) ** 2
                 volumes[j, i] = quad(func, 0, 1)[0]
 
+                if self.r is not None:
                 # Negative part
-                neg_vol = (
-                    np.pi
-                    / 3
-                    * (self.contact_height[j](t) - self.apex(t)) ** 2
-                    * (3 * self.r - self.contact_height[j](t) + self.apex(t))
-                )
-
-                volumes[j, i] -= neg_vol
+                    neg_vol = (
+                        np.pi
+                        / 3
+                        * (self.contact_height[j](t) - self.apex(t)) ** 2
+                        * (3 * self.r - self.contact_height[j](t) + self.apex(t))
+                    )
+                    volumes[j, i] -= neg_vol
 
         volume_functions = [
             UnivariateSpline(self.times, vol, k=2, s=0) for vol in volumes
@@ -162,7 +172,6 @@ class Bridge(object):
         plt.axis("equal")
         plt.grid()
         plt.legend()
-        # plt.savefig("test.png")
         plt.show()
 
     def fit_R_of_ts(
@@ -195,7 +204,7 @@ class Bridge(object):
 
         return R_of_ts, H_of_ts, apex, dR_dt_of_ts, dH_dt_of_ts
 
-    def refit_profile(self, h, R, N):
+    def refit_profile(self, h, R, N=100):
         s = np.linspace(0, 1, len(h))
         xs = UnivariateSpline(s, h, k=3, s=0)
         ys = UnivariateSpline(s, np.abs(R - self.yc), k=3, s=0)

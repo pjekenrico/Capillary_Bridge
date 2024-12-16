@@ -119,7 +119,14 @@ def run_segmentation(
                 initial_lsf[box[1] : box[-1], box[0] : box[2]] = -c0
             initial_lsf = initial_lsf[lines[0] : lines[-1]]
         else:
-            initial_lsf = phi
+            x_init = np.mean(contours[0][:, 0]) / 2
+            x_init += np.mean(contours[1][:, 0]) / 2
+            x_init = int(np.mean(x_init)) + lines[0]
+            initial_lsf = c0 * np.ones(img.shape)
+            # generate the initial region R0 as two rectangles
+            for box in boxes:
+                initial_lsf[x_init - 1 : x_init + 2, box[0] : box[2]] = -c0
+            initial_lsf = initial_lsf[lines[0] : lines[-1]]
 
         old_contours = np.inf * np.ones_like(boxes)
         converged = False

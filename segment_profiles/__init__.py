@@ -27,7 +27,7 @@ def write_json(data: dict, json_file: str) -> None:
     return
 
 
-def run_segmentation_from_json(json_file: str, circle=True):
+def run_segmentation_from_json(json_file: str):
 
     try:
         data = read_json(json_file)
