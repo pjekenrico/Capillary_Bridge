@@ -108,7 +108,7 @@ def find_lsf(
         raise Exception("Please make sure the image data is in the range [0, 255]")
 
     # parameters
-    mu = 0.2 / timestep  # coefficient of the distance regularization term R(phi)
+    mu = 0.1 / timestep  # coefficient of the distance regularization term R(phi)
 
     img = np.array(img, dtype="float32")
     img_smooth = gaussian_filter(img, sigma)  # smooth image by Gaussian convolution

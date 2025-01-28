@@ -208,7 +208,7 @@ def run_segmentation(
             if converged:
                 # Reorder profiles to have the left one first
                 profiles = sorted(profiles, key=lambda x: np.min(x[:, 1]))
-                data_frame.add_data(profiles, idx, [xc - lines[0], yc, r])
+                data_frame.add_data(profiles, idx, [xc, yc, r])
                 break
 
     return data_frame

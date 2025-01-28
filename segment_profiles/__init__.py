@@ -62,6 +62,7 @@ def run_segmentation_from_json(json_file: str):
     if data["flat_top"]:
         contact_lines_data = flat_segmentation(**data)
     else:
+        del data["flat_top"]
         contact_lines_data = circ_segmnetation(**data)
 
     contact_lines_data.save_data(out_file)

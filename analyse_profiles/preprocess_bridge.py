@@ -4,6 +4,31 @@ from scipy.integrate import quad
 import matplotlib.pyplot as plt
 
 
+def rolling_average(data, window_size):
+    """
+    Compute the rolling average of a 1D array.
+
+    Parameters:
+        data (array-like): The input 1D array.
+        window_size (int): The size of the moving window.
+
+    Returns:
+        np.ndarray: The rolling average array. The result has NaN for edges where the window doesn't fully fit.
+    """
+    if window_size < 1:
+        raise ValueError("Window size must be at least 1.")
+    if window_size > len(data):
+        raise ValueError("Window size must not exceed the length of the data.")
+
+    # Use np.convolve to calculate the moving average
+    kernel = np.ones(window_size) / window_size
+
+    # pad edges with boundary
+    data = np.pad(data, (window_size // 2, window_size // 2), mode="edge")
+
+    return np.convolve(data, kernel, mode="valid")
+
+
 class Bridge(object):
 
     def __init__(
@@ -24,8 +49,10 @@ class Bridge(object):
         else:
             self.xc = line_positions
             x_max_left = np.max([np.max(profile[i][0][0]) for i in range(len(profile))])
-            x_min_right = np.min([np.min(profile[i][1][0]) for i in range(len(profile))])
-            
+            x_min_right = np.min(
+                [np.min(profile[i][1][0]) for i in range(len(profile))]
+            )
+
             self.yc = np.mean(x_max_left + x_min_right) / 2
             self.r = None
             apex = None
@@ -49,35 +76,42 @@ class Bridge(object):
         self.apex = UnivariateSpline(self.times, apex, k=2)
 
         self.contact_radius, self.contact_height, self.contact_angle = (
-            self.compute_contact_data(ds=0.02)
+            self.compute_contact_data()
         )
 
         self.neck_height, self.neck_radius = self.compute_neck_data()
 
-        self.volume = self.compute_volume()
+        # self.volume = self.compute_volume()
 
         self.curvature = self.compute_curvature()
 
         return
 
     def compute_contact_data(self):
+
+        cont_rad_left = np.squeeze(self.R[0](self.times, 1))
+        cont_rad_left[cont_rad_left < cont_rad_left[-1]] = cont_rad_left[-1]
+
+        cont_rad_right = np.squeeze(self.R[1](self.times, 1))
+        cont_rad_right[cont_rad_right < cont_rad_right[-1]] = cont_rad_right[-1]
+
+        cont_height_left = np.squeeze(self.H[0](self.times, 1))
+        cont_height_left[cont_height_left < cont_height_left[-1]] = cont_height_left[-1]
+
+        cont_height_right = np.squeeze(self.H[1](self.times, 1))
+        cont_height_right[cont_height_right < cont_height_right[-1]] = (
+            cont_height_right[-1]
+        )
+
         # Contact angles, s = 1
         contact_radius = [
-            UnivariateSpline(
-                self.times, np.squeeze(self.R[0](self.times, 1)), k=2, s=0
-            ),
-            UnivariateSpline(
-                self.times, np.squeeze(self.R[1](self.times, 1)), k=2, s=0
-            ),
+            UnivariateSpline(self.times, cont_rad_left, k=2, s=0),
+            UnivariateSpline(self.times, cont_rad_right, k=2, s=0),
         ]
 
         contact_height = [
-            UnivariateSpline(
-                self.times, np.squeeze(self.H[0](self.times, 1)), k=2, s=0
-            ),
-            UnivariateSpline(
-                self.times, np.squeeze(self.H[1](self.times, 1)), k=2, s=0
-            ),
+            UnivariateSpline(self.times, cont_height_left, k=2, s=0),
+            UnivariateSpline(self.times, cont_height_right, k=2, s=0),
         ]
 
         contact_angle = self.compute_contact_angles(ds=0.02)
@@ -102,6 +136,7 @@ class Bridge(object):
             )
             for k, rad in enumerate(self.R)
         ]
+
         return height, radius
 
     def compute_volume(self):
@@ -114,7 +149,7 @@ class Bridge(object):
                 volumes[j, i] = quad(func, 0, 1)[0]
 
                 if self.r is not None:
-                # Negative part
+                    # Negative part
                     neg_vol = (
                         np.pi
                         / 3
@@ -143,7 +178,8 @@ class Bridge(object):
         contact_angles = np.rad2deg(contact_angles)
         contact_angles = np.abs(contact_angles)
         contact_angles = [
-            UnivariateSpline(self.times, angles, k=2, s=0) for angles in contact_angles
+            UnivariateSpline(self.times, rolling_average(angles, 7), k=2, s=0)
+            for angles in contact_angles
         ]
 
         return contact_angles
