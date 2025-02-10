@@ -81,6 +81,7 @@ def find_lsf(
     timestep=1,
     iter_inner=10,
     iter_outer=30,
+    mu=0.1,
     lmda=5,
     alfa=-3,
     epsilon=1.5,
@@ -108,7 +109,7 @@ def find_lsf(
         raise Exception("Please make sure the image data is in the range [0, 255]")
 
     # parameters
-    mu = 0.1 / timestep  # coefficient of the distance regularization term R(phi)
+    mu_t = mu / timestep  # coefficient of the distance regularization term R(phi)
 
     img = np.array(img, dtype="float32")
     img_smooth = gaussian_filter(img, sigma)  # smooth image by Gaussian convolution
@@ -121,11 +122,11 @@ def find_lsf(
 
     # start level set evolution
     for n in range(iter_outer):
-        phi = drlse_edge(phi, g, lmda, mu, alfa, epsilon, timestep, iter_inner)
+        phi = drlse_edge(phi, g, lmda, mu_t, alfa, epsilon, timestep, iter_inner)
         yield phi
 
     # refine the zero level contour by further level set evolution with alfa=0
     alfa = 0
     iter_refine = 10
-    phi = drlse_edge(phi, g, lmda, mu, alfa, epsilon, timestep, iter_refine)
+    phi = drlse_edge(phi, g, lmda, mu_t, alfa, epsilon, timestep, iter_refine)
     yield phi

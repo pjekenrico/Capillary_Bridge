@@ -34,14 +34,20 @@ class ImageViewer(QMainWindow):
         self.marked_boxes = [(0, 0, 0, 0), (0, 0, 0, 0)]  # Default to two empty boxes
         self.selected_height = None  # To store the selected height
         self.selected_height2 = None  # To store the second selected height
+        self.selected_height3 = None  # To store the third selected height
         self.current_image = None
         self.rect_selector = None
         self.current_box_index = 0  # Track which box is being edited
         self.line_selector_cid1 = None  # Store connection ID for the first height
         self.line_selector_cid2 = None  # Store connection ID for the second height
+        self.line_selector_cid3 = None  # Store connection ID for the second height
         self.result = {
             "boxes": self.marked_boxes,
-            "heights": [self.selected_height, self.selected_height2],
+            "heights": [
+                self.selected_height,
+                self.selected_height2,
+                self.selected_height3,
+            ],
         }
         self.angle = 0
         self.flat_top = False
@@ -223,6 +229,20 @@ class ImageViewer(QMainWindow):
         height_layout2.addWidget(self.height_input2)
         layout.addLayout(height_layout2)
 
+        # Add a button to select the second height
+        height_layout3 = QHBoxLayout()
+        height_button3 = QPushButton("Set Height 3", self)
+        height_button3.clicked.connect(self.set_height3)
+        height_layout3.addWidget(height_button3)
+
+        # Add the label and input field for the second selected height
+        self.height_input3 = QLineEdit(self)
+        self.height_input3.setPlaceholderText("Enter height 3 (y-coordinate)")
+        self.height_input3.editingFinished.connect(self.update_height_from_input3)
+        height_layout3.addWidget(QLabel("Height 3:"))
+        height_layout3.addWidget(self.height_input3)
+        layout.addLayout(height_layout3)
+
         # Add a label and input field for setting the rotation angle
         angle_layout = QHBoxLayout()
         angle_label = QLabel("Rotation Angle (degrees):", self)
@@ -385,7 +405,9 @@ class ImageViewer(QMainWindow):
         # Close the window and continue with the rest of the code
         self.result = {
             "boxes": self.marked_boxes,
-            "heights": sorted([self.selected_height, self.selected_height2]),
+            "heights": sorted(
+                [self.selected_height, self.selected_height2, self.selected_height3]
+            ),
             "angle": self.angle,
             "flat_top": self.flat_top,
         }
@@ -434,6 +456,15 @@ class ImageViewer(QMainWindow):
             "button_press_event", self.onclick_height2
         )
 
+    def set_height3(self):
+        # Disconnect all previous events
+        self.disconnect_all_selectors()
+
+        # Enable height selection for the second height
+        self.line_selector_cid3 = self.fig.canvas.mpl_connect(
+            "button_press_event", self.onclick_height3
+        )
+
     def disconnect_all_selectors(self):
         # Disconnect all selection events (box and height)
         if self.rect_selector:
@@ -445,6 +476,9 @@ class ImageViewer(QMainWindow):
         if self.line_selector_cid2 is not None:
             self.fig.canvas.mpl_disconnect(self.line_selector_cid2)
             self.line_selector_cid2 = None
+        if self.line_selector_cid3 is not None:
+            self.fig.canvas.mpl_disconnect(self.line_selector_cid3)
+            self.line_selector_cid3 = None
 
     def onclick_height1(self, event):
         # Handle mouse click event to set the first height
@@ -458,6 +492,13 @@ class ImageViewer(QMainWindow):
         if event.inaxes == self.ax:
             self.selected_height2 = int(event.ydata)
             self.height_input2.setText(str(self.selected_height2))
+            self.draw_line()
+
+    def onclick_height3(self, event):
+        # Handle mouse click event to set the second height
+        if event.inaxes == self.ax:
+            self.selected_height3 = int(event.ydata)
+            self.height_input3.setText(str(self.selected_height3))
             self.draw_line()
 
     def update_height_from_input(self):
@@ -476,6 +517,14 @@ class ImageViewer(QMainWindow):
         except ValueError:
             pass  # Ignore if the input is not valid
 
+    def update_height_from_input3(self):
+        # Update the second selected height based on the input field
+        try:
+            self.selected_height3 = int(self.height_input3.text())
+            self.draw_line()
+        except ValueError:
+            pass  # Ignore if the input is not valid
+
     def draw_line(self):
         # Remove previous lines if they exist
         for line in self.ax.lines:
@@ -485,6 +534,8 @@ class ImageViewer(QMainWindow):
             self.ax.axhline(self.selected_height, color="green", linewidth=2)
         if self.selected_height2 is not None:
             self.ax.axhline(self.selected_height2, color="red", linewidth=2)
+        if self.selected_height3 is not None:
+            self.ax.axhline(self.selected_height3, color="yellow", linewidth=2)
         self.fig.canvas.draw()
 
 

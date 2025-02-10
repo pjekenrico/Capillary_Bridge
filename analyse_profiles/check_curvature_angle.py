@@ -34,35 +34,13 @@ def compute_contact_angles(t, R, H, ds=0.02):
 
     return contact_angles
 
-
-def compute_curvature(R, H, t, s):
-
-    # Reinterpolate the derivatives to have a smoother curvature
-    dx = RectBivariateSpline(t, s, R(t, s, dy=1))
-
-    ddx = RectBivariateSpline(t, s, dx(t, s, dy=1))
-
-    dy = RectBivariateSpline(t, s, H(t, s, dy=1))
-
-    ddy = RectBivariateSpline(t, s, dy(t, s, dy=1))
-
-    curvature = lambda t, s: np.abs(
-        (dx(t, s) * ddy(t, s) - dy(t, s) * ddx(t, s))
-        / ((dx(t, s) ** 2 + dy(t, s) ** 2) ** 1.5)
-    )
-
-    return curvature
-
 def numerical_curvature(R, H, s):
     
     # Compute the derivatives with numerical gradients
-    dx = np.gradient(R) / np.gradient(s)
-    ddx = np.gradient(dx, axis=0) / np.gradient(s)
+    dRdH = np.gradient(R) / np.gradient(H)
+    ddRddH = np.gradient(dRdH) / np.gradient(H)
     
-    dy = np.gradient(H) / np.gradient(s)
-    ddy = np.gradient(dy, axis=0) / np.gradient(s)
-    
-    curvature = np.abs((dx * ddy - dy * ddx) / ((dx ** 2 + dy ** 2) ** 1.5))
+    curvature = ddRddH / (1 + dRdH ** 2) ** 1.5 - 1 / np.sqrt(1 + dRdH ** 2) / R
     
     return np.squeeze(curvature)
 
@@ -85,62 +63,19 @@ def main():
 
     T = np.linspace(np.min(bridge.times), np.max(bridge.times), 100)
     s = np.linspace(0, 1, 40)
-    fig = plt.figure(figsize=(8, 6))
-    ax = plt.gca()
-
-    R = lambda t, s: 0.5 * (bridge.R[0](t, s) + bridge.R[1](t, s))
-    H = lambda t, s: 0.5 * (bridge.H[0](t, s) + bridge.H[1](t, s))
-    C = lambda t, s: 0.5 * (bridge.curvature[0](t, s) + bridge.curvature[1](t, s))
-
-    plt.xlabel("Contact Radius [mm]")
-    plt.ylabel("Contact Height [mm]")
-    set_nice_grid(ax)
-
-    # Normalize curvature
-    norm = Normalize(vmin=0, vmax=2)
-    min_r = np.min([np.min(R(t, s)) for t in T])
-    max_r = np.max([np.max(R(t, s)) for t in T])
-    min_h = np.min([np.min(H(t, s)) for t in T])
-    max_h = np.max([np.max(H(t, s)) for t in T])
-
-    for t in T:
-        # Extract radius, height, and curvature for current time
-        r = np.squeeze(R(t, s))
-        h = np.squeeze(H(t, s))
-        c = np.squeeze(C(t, s))
-
-        # Define segments for LineCollection
-        points = np.array([r, h]).T.reshape(-1, 1, 2)
-        segments = np.concatenate([points[:-1], points[1:]], axis=1)
-
-        # Create a LineCollection and add it
-        lc = LineCollection(segments, cmap="viridis", norm=norm)
-        lc.set_array(c)  # Assign curvature values for coloring
-        lc.set_linewidth(2)
-        ax.add_collection(lc)
-
-    # Add colorbar
-    sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
-    sm.set_array([])
-    plt.colorbar(sm, ax=ax, label="Curvature [1/mm]")
-
-    plt.xlim([min_r, max_r])
-    plt.ylim([min_h, max_h])
-    plt.tight_layout()
 
     # second plot
     fig = plt.figure(figsize=(8, 6))
     ax = plt.gca()
 
     R, H = smooth_RH(bridge.times, s, bridge.R, bridge.H, smoothing=None)
-    C = compute_curvature(R, H, T, s)
 
     plt.xlabel("Contact Radius [mm]")
     plt.ylabel("Contact Height [mm]")
     set_nice_grid(ax)
 
     # Normalize curvature
-    norm = Normalize(vmin=0, vmax=2)
+    norm = Normalize(vmin=-1, vmax=1)
     min_r = np.min([np.min(R(t, s)) for t in T])
     max_r = np.max([np.max(R(t, s)) for t in T])
     min_h = np.min([np.min(H(t, s)) for t in T])
@@ -151,7 +86,6 @@ def main():
         r = np.squeeze(R(t, s))
         h = np.squeeze(H(t, s))
         c = numerical_curvature(r, h, s)
-        # c = np.squeeze(C(t, s))
 
         # Define segments for LineCollection
         points = np.array([r, h]).T.reshape(-1, 1, 2)

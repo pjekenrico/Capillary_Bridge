@@ -187,6 +187,7 @@ def run_segmentation(
                     orig_img[lines[0] : lines[-1]],
                     epsilon=segmentation_options["tol_circle"],
                     normal_tolerance=segmentation_options["tol_circle_normal"],
+                    tol_bath=segmentation_options["tol_bath"],
                     circle_data=(xc, yc, r),
                 )
                 profile = contour[profile_idx]

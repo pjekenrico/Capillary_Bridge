@@ -15,7 +15,7 @@ def set_nice_grid(ax):
 
 def main():
 
-    path = os.path.join("series", "NWG10_V2500_profiles.npz")
+    path = os.path.join("series", "NWG10_V50_profiles.npz")
 
     # Reads and extracts data from npz
     data = Dataframe(data_path=path)

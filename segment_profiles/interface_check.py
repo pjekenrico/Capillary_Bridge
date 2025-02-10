@@ -1,6 +1,5 @@
 import numpy as np
-from scipy import signal
-from scipy import stats
+from scipy import signal, stats
 
 from segment_profiles.tools import load_image, rotate_and_crop_img
 
@@ -131,8 +130,42 @@ def find_circle(img: np.ndarray):
     return xc, yc, r
 
 
+def remove_true_islands(arr, max_size):
+    """
+    Removes islands of True values beyond a certain size.
+
+    Parameters:
+    arr (list of bool): The input 1D boolean array.
+    max_size (int): The maximum allowed size for True islands.
+
+    Returns:
+    list of bool: The modified boolean array with large True islands removed.
+    """
+    import itertools
+
+    result = arr[:]
+
+    # Identify islands of True values
+    start = None
+    for i, (key, group) in enumerate(
+        itertools.groupby(enumerate(arr), key=lambda x: x[1])
+    ):
+        if key:  # True island
+            indices = [idx for idx, val in group]
+            if len(indices) < max_size:
+                for idx in indices:
+                    result[idx] = False  # Remove the island
+
+    return result
+
+
 def match_line_with_circle_and_normal(
-    interface_points, img, epsilon=2, normal_tolerance=0.1, circle_data: list = None
+    interface_points: np.ndarray,
+    img: np.ndarray,
+    epsilon: float = 2.0,
+    normal_tolerance: float = 0.05,
+    tol_bath: int = 0,
+    circle_data: list = None,
 ):
     """
     Identify which parts of the interface line match well with the circle, including normal direction checks using numpy.
@@ -153,9 +186,6 @@ def match_line_with_circle_and_normal(
     else:
         xc, yc, r = circle_data
     circle_center = np.array([xc, yc])
-
-    # Convert inputs to numpy arrays
-    interface_points = np.array(interface_points)
 
     # Compute the circle normals and their normalized forms
     circle_normals = interface_points - circle_center
@@ -193,6 +223,12 @@ def match_line_with_circle_and_normal(
     # Final match condition
     matches = np.logical_not(distance_match & normal_match)
 
+    # Remove matches with x > len(img) - tol_bath
+    matches = np.logical_and(matches, interface_points[:, 0] < len(img) - tol_bath)
+
+    # Remove true islands (imperfections in the profile at the circle)
+    matches = remove_true_islands(matches, max_size=10)
+
     return matches
 
 
@@ -221,7 +257,7 @@ def preprocess_circle(
     for idx in idx_to_analyze:
         image = load_image(folder_path, idx, extension)
         image = rotate_and_crop_img(image, angle)
-        images.append(image[lines[0] : lines[-1]])
+        images.append(image[lines[0] : lines[1]])
     images = np.array(images)
 
     # Find the circle centers
@@ -236,7 +272,7 @@ def preprocess_circle(
     # np.savez_compressed("circle_data.npz", circle_data=circle_data)
 
     x = circle_data[:, 2] - np.mean(circle_data[:, 2]) + circle_data[:, 0]
-    y = np.mean(circle_data[:, 1])
+    y = np.median(circle_data[:, 1])
     r = np.mean(circle_data[:, 2])
     stat = stats.linregress(idx_to_analyze, x)
     x = stat.slope * idx_to_analyze + stat.intercept
@@ -280,11 +316,11 @@ def compute_curvature(x, y):
 
 
 def find_line(img: np.ndarray) -> float:
-    
+
     # Define the Scharr operator for a gradients in the height axis
     scharr = np.array([[3, 10, 3], [0, 0, 0], [-3, -10, -3]])
     grad = signal.convolve2d(img, scharr, boundary="symm", mode="same")
-    xc = np.argmax(np.mean(grad, axis=1))    
+    xc = np.argmax(np.mean(grad, axis=1))
     return xc
 
 
