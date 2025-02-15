@@ -36,11 +36,13 @@ def run_segmentation_from_json(json_file: str):
             "timestep": 3,
             "iter_inner": 10,
             "iter_outer": 400,
+            "mu": 0.1,
             "lmda": 2,
             "alfa": -2,
             "epsilon": 1.5,
             "sigma": 0.5,
             "tol_contours": 5,
+            "tol_bath": 3,
             "tol_circle": 5,
             "tol_circle_normal": 0.05,
         }

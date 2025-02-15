@@ -1,6 +1,14 @@
 import os
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Get the absolute path of the 'main' directory
+main_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add 'main' to the Python path
+sys.path.append(main_dir)
+
 from segment_profiles.lvlset_segmentation import Dataframe
 from analyse_profiles.preprocess_bridge import Bridge
 from scipy.interpolate import UnivariateSpline
@@ -15,7 +23,7 @@ def set_nice_grid(ax):
 
 def main():
 
-    path = os.path.join("series", "NWG10_V2500_profiles.npz")
+    path = os.path.join("series", "SHW_V1000_profiles.npz")
 
     # Reads and extracts data from npz
     data = Dataframe(data_path=path)

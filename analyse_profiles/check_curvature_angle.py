@@ -1,6 +1,14 @@
 import os
+import sys
 import matplotlib.pyplot as plt
 import numpy as np
+
+# Get the absolute path of the 'main' directory
+main_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+
+# Add 'main' to the Python path
+sys.path.append(main_dir)
+
 from segment_profiles.lvlset_segmentation import Dataframe
 from analyse_profiles.preprocess_bridge import Bridge
 from scipy.interpolate import UnivariateSpline, RectBivariateSpline
@@ -8,61 +16,24 @@ from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
 
+# Constants
+density = 1000
+g = 9.81
+surface_tension = 0.071
+
 def set_nice_grid(ax):
     ax.grid(True)
     ax.grid(which="major", linestyle="-", linewidth="0.5", color="gray")
     ax.grid(which="minor", linestyle=":", linewidth="0.5", color="gray")
     ax.minorticks_on()
 
-
-def compute_contact_angles(t, R, H, ds=0.02):
-
-    contact_radia = np.array([c(t, np.array([1 - ds, 1])) for c in R])
-
-    contact_heights = np.array([c(t, [1 - ds, 1]) for c in H])
-
-    contact_angles = np.arctan(
-        (contact_heights[:, :, 1] - contact_heights[:, :, 0])
-        / (contact_radia[:, :, 1] - contact_radia[:, :, 0])
-    )
-
-    contact_angles = np.rad2deg(contact_angles)
-    contact_angles = np.abs(contact_angles)
-    contact_angles = [
-        UnivariateSpline(t, angles, k=2, s=0) for angles in contact_angles
-    ]
-
-    return contact_angles
-
-
-def compute_curvature(R, H, t, s):
-
-    # Reinterpolate the derivatives to have a smoother curvature
-    dx = RectBivariateSpline(t, s, R(t, s, dy=1))
-
-    ddx = RectBivariateSpline(t, s, dx(t, s, dy=1))
-
-    dy = RectBivariateSpline(t, s, H(t, s, dy=1))
-
-    ddy = RectBivariateSpline(t, s, dy(t, s, dy=1))
-
-    curvature = lambda t, s: np.abs(
-        (dx(t, s) * ddy(t, s) - dy(t, s) * ddx(t, s))
-        / ((dx(t, s) ** 2 + dy(t, s) ** 2) ** 1.5)
-    )
-
-    return curvature
-
 def numerical_curvature(R, H, s):
     
     # Compute the derivatives with numerical gradients
-    dx = np.gradient(R) / np.gradient(s)
-    ddx = np.gradient(dx, axis=0) / np.gradient(s)
+    dRdH = np.gradient(R) / np.gradient(H)
+    ddRddH = np.gradient(dRdH) / np.gradient(H)
     
-    dy = np.gradient(H) / np.gradient(s)
-    ddy = np.gradient(dy, axis=0) / np.gradient(s)
-    
-    curvature = np.abs((dx * ddy - dy * ddx) / ((dx ** 2 + dy ** 2) ** 1.5))
+    curvature = ddRddH / (1 + dRdH ** 2) ** 1.5 - 1 / np.sqrt(1 + dRdH ** 2) / R
     
     return np.squeeze(curvature)
 
@@ -73,6 +44,34 @@ def smooth_RH(t, s, R, H, smoothing=0.2):
     data = (H[0](t, s) + H[1](t, s)) / 2
     H_smooth = RectBivariateSpline(t, s, data, s=smoothing)
     return R_smooth, H_smooth
+
+def smooth_dR(t, s, dR, smoothing=0.2):
+    data = (dR[0](t, s) + dR[1](t, s)) / 2 
+    dR_smooth = RectBivariateSpline(t, s, data, s=smoothing)
+    return dR_smooth
+
+def velocity_z(t, s, R, H, dR):
+    s=np.flip(s)
+    R =np.flip(R)
+    H =np.flip(H)
+    dR=np.flip(dR)
+    # comupte the integral of 2 dR R dz / R^2 between 0 and H 
+    dz = H / len(s)
+    integral = 0
+    for i in range(len(s)):
+        integral += 2 * dR[i] * R[i] * dz / R[i] ** 2
+    return integral
+
+def laplace_pressure(surface_tension, R, H, s):
+    curvature = numerical_curvature(R, H, s)
+    return surface_tension * curvature * 1000  # Convert to Pa
+
+def inertia_pressure(density, t, s, R, H, dR):
+    velocity = velocity_z(t, s, R, H, dR)
+    return 1/2 * density * (velocity * 0.001) ** 2  # Convert dR from mm to m
+
+def gravity_pressure(density, g, H):
+    return density * g * (H * 0.001)  # Convert H from mm to m
 
 
 def main():
@@ -85,73 +84,36 @@ def main():
 
     T = np.linspace(np.min(bridge.times), np.max(bridge.times), 100)
     s = np.linspace(0, 1, 40)
-    fig = plt.figure(figsize=(8, 6))
-    ax = plt.gca()
-
-    R = lambda t, s: 0.5 * (bridge.R[0](t, s) + bridge.R[1](t, s))
-    H = lambda t, s: 0.5 * (bridge.H[0](t, s) + bridge.H[1](t, s))
-    C = lambda t, s: 0.5 * (bridge.curvature[0](t, s) + bridge.curvature[1](t, s))
-
-    plt.xlabel("Contact Radius [mm]")
-    plt.ylabel("Contact Height [mm]")
-    set_nice_grid(ax)
-
-    # Normalize curvature
-    norm = Normalize(vmin=0, vmax=2)
-    min_r = np.min([np.min(R(t, s)) for t in T])
-    max_r = np.max([np.max(R(t, s)) for t in T])
-    min_h = np.min([np.min(H(t, s)) for t in T])
-    max_h = np.max([np.max(H(t, s)) for t in T])
-
-    for t in T:
-        # Extract radius, height, and curvature for current time
-        r = np.squeeze(R(t, s))
-        h = np.squeeze(H(t, s))
-        c = np.squeeze(C(t, s))
-
-        # Define segments for LineCollection
-        points = np.array([r, h]).T.reshape(-1, 1, 2)
-        segments = np.concatenate([points[:-1], points[1:]], axis=1)
-
-        # Create a LineCollection and add it
-        lc = LineCollection(segments, cmap="viridis", norm=norm)
-        lc.set_array(c)  # Assign curvature values for coloring
-        lc.set_linewidth(2)
-        ax.add_collection(lc)
-
-    # Add colorbar
-    sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
-    sm.set_array([])
-    plt.colorbar(sm, ax=ax, label="Curvature [1/mm]")
-
-    plt.xlim([min_r, max_r])
-    plt.ylim([min_h, max_h])
-    plt.tight_layout()
 
     # second plot
     fig = plt.figure(figsize=(8, 6))
     ax = plt.gca()
 
     R, H = smooth_RH(bridge.times, s, bridge.R, bridge.H, smoothing=None)
-    C = compute_curvature(R, H, T, s)
+    dR = smooth_dR(bridge.times, s, bridge.dR, smoothing=None)
 
     plt.xlabel("Contact Radius [mm]")
     plt.ylabel("Contact Height [mm]")
     set_nice_grid(ax)
 
     # Normalize curvature
-    norm = Normalize(vmin=0, vmax=2)
+    norm = Normalize(vmin=-100, vmax=100)
     min_r = np.min([np.min(R(t, s)) for t in T])
     max_r = np.max([np.max(R(t, s)) for t in T])
     min_h = np.min([np.min(H(t, s)) for t in T])
     max_h = np.max([np.max(H(t, s)) for t in T])
+    
+    all_c = []
 
     for t in T:
         # Extract radius, height, and curvature for current time
         r = np.squeeze(R(t, s))
         h = np.squeeze(H(t, s))
-        c = numerical_curvature(r, h, s)
-        # c = np.squeeze(C(t, s))
+        dr = np.squeeze(dR(t, s))
+        c = inertia_pressure(density, t, s, r, h, dr) - gravity_pressure(density, g, h) + laplace_pressure(surface_tension, r, h, s)
+        # + \laplace_pressure(surface_tension, r, h, s) - 
+        #     inertia_pressure(density, t, s, r, h, dr) - \
+        #     gravity_pressure(density, g, h) 
 
         # Define segments for LineCollection
         points = np.array([r, h]).T.reshape(-1, 1, 2)
@@ -159,14 +121,19 @@ def main():
 
         # Create a LineCollection and add it
         lc = LineCollection(segments, cmap="viridis", norm=norm)
-        lc.set_array(c)  # Assign curvature values for coloring
+        lc.set_array(c) 
         lc.set_linewidth(2)
         ax.add_collection(lc)
+
+        all_c.append(c)
+        
+    print("Min pressure: ", np.min(all_c))
+    print("Max pressure: ", np.max(all_c))
 
     # Add colorbar
     sm = plt.cm.ScalarMappable(cmap="viridis", norm=norm)
     sm.set_array([])
-    plt.colorbar(sm, ax=ax, label="Curvature [1/mm]")
+    plt.colorbar(sm, ax=ax, label="Pressure [Pa]")
 
     plt.xlim([min_r, max_r])
     plt.ylim([min_h, max_h])
