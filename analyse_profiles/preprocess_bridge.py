@@ -83,7 +83,7 @@ class Bridge(object):
 
         self.neck_height, self.neck_radius = self.compute_neck_data()
 
-        # self.volume = self.compute_volume()
+        self.volume = self.compute_volume()
 
         self.curvature = self.compute_curvature()
 

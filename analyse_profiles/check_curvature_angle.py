@@ -34,7 +34,7 @@ def compute_contact_angles(t, R, H, ds=0.02):
 
     return contact_angles
 
-def numerical_curvature(R, H, s):
+def numerical_curvature(R, H):
     
     # Compute the derivatives with numerical gradients
     dRdH = np.gradient(R) / np.gradient(H)
@@ -85,7 +85,7 @@ def main():
         # Extract radius, height, and curvature for current time
         r = np.squeeze(R(t, s))
         h = np.squeeze(H(t, s))
-        c = numerical_curvature(r, h, s)
+        c = numerical_curvature(r, h)
 
         # Define segments for LineCollection
         points = np.array([r, h]).T.reshape(-1, 1, 2)
