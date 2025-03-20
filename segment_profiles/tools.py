@@ -3,6 +3,7 @@ import numpy as np
 from skimage import transform
 from collections import Counter
 import matplotlib.pyplot as plt
+import cv2
 
 def rotate_and_crop_img(image: np.ndarray, angle: float | int) -> np.ndarray:
     # Get image dimensions

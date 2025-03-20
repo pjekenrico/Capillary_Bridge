@@ -38,11 +38,15 @@ class Bridge(object):
         times: np.ndarray,
         circle_positions: np.ndarray,
         line_positions: np.ndarray = None,
+        bath_height: float = None,
+        break_index: int = None,
         fps: int = 5000,
-        res: float = 0.046937338652898376,
+        res: float = 0.046937338652898376, 
         N: int = 100,
     ):
         self.times = (times - times[0]) / fps
+        self.bath_height = bath_height
+        self.break_time = (break_index - times[0]) / fps
 
         if line_positions is None:
             circle_positions = np.array(circle_positions).T
@@ -69,13 +73,14 @@ class Bridge(object):
         self.r *= res
         re_interp *= res
         self.apex *= res
+        self.bath_height *= res
 
         # Profiles, where self.R[0] and self.R[0] are the left and right radia as a function of time and position s and self.H[0] and self.H[1] are the heights
         self.R, self.H, self.dR, self.dH = self.fit_R_of_ts(re_interp)
 
         # Apex and xc height as a function of time
-        self.apex = UnivariateSpline(self.times, self.apex, k=2)
-        self.xc = UnivariateSpline(self.times, self.xc, k=2)
+        self.apex = UnivariateSpline(self.times, self.apex, k=1)
+        self.xc = UnivariateSpline(self.times, self.xc, k=1)
 
         self.contact_radius, self.contact_height, self.contact_angle = (
             self.compute_contact_data()
@@ -83,7 +88,7 @@ class Bridge(object):
 
         self.neck_height, self.neck_radius = self.compute_neck_data()
 
-        # self.volume = self.compute_volume()
+        self.volume = self.compute_volume()
 
         self.curvature = self.compute_curvature()
 
@@ -105,7 +110,6 @@ class Bridge(object):
             cont_height_right[-1]
         )
 
-        # Contact angles, s = 1
         contact_radius = [
             UnivariateSpline(self.times, cont_rad_left, k=2, s=0),
             UnivariateSpline(self.times, cont_rad_right, k=2, s=0),
@@ -229,13 +233,15 @@ class Bridge(object):
 
         s = np.linspace(0, 1, len(profiles[0, 0, 0]))
         R_of_ts = [
-            RectBivariateSpline(self.times, s, profiles[:, 0, 1], kx=3, ky=3, s=0),
+            RectBivariateSpline(self.times, s, profiles[:, 0, 1], kx=2, ky=2, s=0),
             RectBivariateSpline(
-                self.times, s, profiles[:, 1, 1, ::-1], kx=3, ky=3, s=0
+                self.times, s, profiles[:, 1, 1, ::-1], kx=2, ky=2, s=0
             ),
         ]
 
-        h_min = np.max(profiles[:, :, 0])
+        h_min = self.bath_height
+        # h_min = np.max(profiles[:, :, 0])
+
         profiles[:, :, 0] -= h_min
         profiles[:, :, 0] *= -1
         self.apex -= h_min
@@ -244,9 +250,9 @@ class Bridge(object):
         self.xc *= -1
 
         H_of_ts = [
-            RectBivariateSpline(self.times, s, profiles[:, 0, 0], kx=3, ky=3, s=0),
+            RectBivariateSpline(self.times, s, profiles[:, 0, 0], kx=2, ky=3, s=0),
             RectBivariateSpline(
-                self.times, s, profiles[:, 1, 0, ::-1], kx=3, ky=3, s=0
+                self.times, s, profiles[:, 1, 0, ::-1], kx=2, ky=3, s=0
             ),
         ]
 
@@ -255,37 +261,22 @@ class Bridge(object):
 
         return R_of_ts, H_of_ts, dR_dt_of_ts, dH_dt_of_ts
 
-    def refit_profile(self, h, R, N=100):
+    def refit_profile(self, h, R, N=30):
         s = np.linspace(0, 1, len(h))
-        xs = UnivariateSpline(s, h, k=3, s=0)
-        ys = UnivariateSpline(s, np.abs(R - self.yc), k=3, s=0)
+        print(len(h))
+        xs = UnivariateSpline(s, h, k=2, s=0)
+        if np.mean(R) < self.yc:
+            ys = UnivariateSpline(s,  self.yc-R, k=2, s=0)
+        else:
+            ys = UnivariateSpline(s, R - self.yc, k=2, s=0)
+            
         return xs(np.linspace(0, 1, N)), ys(np.linspace(0, 1, N))
 
-    def check_circle(self, xc, yc, r) -> list[np.ndarray, float, float, np.ndarray]:
-
+    def check_circle(self, xc:np.ndarray, yc:np.ndarray, r:np.ndarray) -> list[np.ndarray, float, float, np.ndarray]:
         y = np.mean(yc)
-        sigma_y = np.std(yc)
-        if sigma_y > 1:
-            print(
-                "Warning: sigma_y > 1. This may indicate a problem with the circle positions. Or that the angle of the image in the segmentation is not well chosen. In practical terms it means that the ball makes a diagonal movement and does not descend in a centered way."
-            )
-        else:
-            print(
-                f"Checking circle horizontal position... OK\nHorizontal position: {y} +- {sigma_y} pxl"
-            )
-
+        xc = xc.astype(float)
         apex = xc + r
         r = np.mean(r)
-        sigma_r = np.std(r)
-        if sigma_r > 1:
-            print(
-                "Warning: sigma_r > 1. This may indicate issues with the circle recognition. Proceed with caution."
-            )
-        else:
-            print(
-                f"Checking circle radius... OK\nEstimated radius: {r} +- {sigma_r} pxl"
-            )
-
         return xc, y, r, apex
 
     def compute_curvature(self):

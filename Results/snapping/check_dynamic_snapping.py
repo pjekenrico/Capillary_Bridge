@@ -16,7 +16,7 @@ plt.rcParams["ytick.labelsize"] = 12
 plt.rcParams["legend.fontsize"] = 12
 
 # Get the absolute path of the 'main' directory
-main_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+main_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), '../..'))
 sys.path.append(main_dir)
 
 from segment_profiles.lvlset_segmentation import Dataframe
@@ -60,7 +60,7 @@ def main():
     colors = colors_WG50 + colors_WG10 +colors_W 
     markers = ["o", "d", "*", "o", "d", "*", "o", "d", "*"]
     
-    fig, ax = plt.subplots(figsize=(7, 4), dpi=100)
+    fig, ax = plt.subplots(figsize=(7, 4), dpi=200)
     plt.subplots_adjust(right=0.5) 
 
     csv_filename = "contact_radius_data.csv"
@@ -80,8 +80,14 @@ def main():
             t = np.concatenate((t, extended_time))
             mean_c = np.concatenate((mean_c, extended_radius))
             smooth_c = UnivariateSpline(t, mean_c, s=0.1)
-            smooth_c_values = smooth_c(t) / smooth_c(t[0])
-            time = t[-1] - t + 1e-10
+            smooth_c_values = smooth_c(t) #/ smooth_c(t[0])
+            time = t[-1] - t#+ 1e-10
+            
+            v1, v2 = bridge.dR[0](t,1), bridge.dR[1](t,1)
+            mean_v = np.abs((v1 + v2)) / 2          
+
+            # smooth_v = UnivariateSpline(t, mean_v, s=0)
+            # smooth_v_values = smooth_v(t)
 
             for j in range(len(time)):
                 writer.writerow([filename, time[j], smooth_c_values[j]])
@@ -89,7 +95,7 @@ def main():
             color_rgb = np.array(mcolors.to_rgb(colors[i]))
             lightened_color = 0.3 * color_rgb + 0.7 * np.array([1, 1, 1])
             ax.plot(time, smooth_c_values, color='gray', alpha=0.2, linewidth=1.5, linestyle="--")
-            ax.scatter(time[::25], smooth_c_values[::25], s=35, marker=markers[i], 
+            ax.scatter(time[::1], smooth_c_values[::1], s=35, marker=markers[i], 
                        edgecolors=colors[i], facecolors=[lightened_color], alpha=0.8, 
                        label=f"{velocity_label}")
     
@@ -113,13 +119,13 @@ def main():
     # # ax.plot(x_slope, y_sope_1_3, ":", color="black", alpha=0.8)
     
     ax.set_ylabel(r"$R^* = R/R_0$")
-    ax.set_xlabel(r"$t_c - t$")
+    ax.set_xlabel(r"$t_c - t$ [s]")
     set_nice_grid(ax)
     # log 
     ax.set_yscale("log")
     ax.set_xscale("log")
-    ax.set_xlim(1e-4, 3)
-    ax.set_ylim(1e-4, 3)
+    # ax.set_xlim(1e-4, 3)
+    # ax.set_ylim(1e-4, 3)
     ax.legend(loc="center left", bbox_to_anchor=(1, 0.5))
     plt.suptitle(r"\textbf{Contact Radius}", fontsize=16)
     plt.tight_layout()

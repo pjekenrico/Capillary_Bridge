@@ -27,15 +27,20 @@ class Dataframe(object):
         folder_path: str = None,
         boxes: list[tuple] = None,
         lines: list = None,
+        bath_height: int = None,
         angle: float = None,
+        break_index : int = None,
         segmentation_options: dict = None,
         data_path: str = None,
     ):
+
         self.metadata = {  # metadata
             "folder_path": folder_path,
             "boxes": boxes,
             "lines": lines,
+            "bath_height": bath_height,
             "angle": angle,
+            "break_index" : break_index,
             "segmentation_options": segmentation_options,
         }
 
@@ -108,9 +113,9 @@ def run_segmentation(
     lines: list,
     angle: float,
     segmentation_options: dict,
+    bath_height: int = None,
+    break_index: int = None,
 ) -> Dataframe:
-
-    data_frame = Dataframe(folder_path, boxes, lines, angle, segmentation_options)
 
     plt.ion()
     _, ax = plt.subplots()
@@ -118,6 +123,18 @@ def run_segmentation(
     extension = most_common_image_format(folder_path)
     paths = get_file_paths(folder_path, extension)
     idx_to_analyze = get_image_numbers(paths)
+    
+    if break_index is None:
+        break_index = idx_to_analyze[-1]
+        print(f"No explicit bridge breakage time given. Taking lower last image index.")
+        
+        
+    if bath_height is None:
+        bath_height = lines[-1]
+        print(f"No explicit bath height given. Taking lower image limit.")
+            
+        
+    data_frame = Dataframe(folder_path, boxes, lines, bath_height, angle, break_index, segmentation_options)
 
     # idx_to_analyze = segment_indices(numbers)
     x, yc, r = preprocess_circle(folder_path, idx_to_analyze, extension, angle, lines)

@@ -35,12 +35,15 @@ class ImageViewer(QMainWindow):
         self.selected_height = None  # To store the selected height
         self.selected_height2 = None  # To store the second selected height
         self.selected_height3 = None  # To store the third selected height
+        self.selected_height4 = None  # To store the third selected height
         self.current_image = None
         self.rect_selector = None
         self.current_box_index = 0  # Track which box is being edited
         self.line_selector_cid1 = None  # Store connection ID for the first height
         self.line_selector_cid2 = None  # Store connection ID for the second height
         self.line_selector_cid3 = None  # Store connection ID for the second height
+        self.line_selector_cid4 = None  # Store connection ID for the second height
+        self.break_index = None  # Store connection ID for the second height
         self.result = {
             "boxes": self.marked_boxes,
             "heights": [
@@ -48,6 +51,8 @@ class ImageViewer(QMainWindow):
                 self.selected_height2,
                 self.selected_height3,
             ],
+            "bath_height": self.selected_height4,
+            "break_index": self.break_index,
         }
         self.angle = 0
         self.flat_top = False
@@ -242,6 +247,20 @@ class ImageViewer(QMainWindow):
         height_layout3.addWidget(QLabel("Height 3:"))
         height_layout3.addWidget(self.height_input3)
         layout.addLayout(height_layout3)
+        
+        # Add a button to select the second height
+        height_layout4 = QHBoxLayout()
+        height_button4 = QPushButton("Set bath height", self)
+        height_button4.clicked.connect(self.set_height4)
+        height_layout4.addWidget(height_button4)
+        
+        # Add the label and input field for the second selected height
+        self.height_input4 = QLineEdit(self)
+        self.height_input4.setPlaceholderText("Enter bath height (y-coordinate)")
+        self.height_input4.editingFinished.connect(self.update_height_from_input4)
+        height_layout4.addWidget(QLabel("Bath height:"))
+        height_layout4.addWidget(self.height_input4)
+        layout.addLayout(height_layout4)
 
         # Add a label and input field for setting the rotation angle
         angle_layout = QHBoxLayout()
@@ -253,6 +272,16 @@ class ImageViewer(QMainWindow):
         angle_layout.addWidget(angle_label)
         angle_layout.addWidget(self.angle_input)
         layout.addLayout(angle_layout)
+        
+        # Add a label and input field for setting the rotation angle
+        break_index_layout = QHBoxLayout()
+        break_index_label = QLabel("Image number at breakage:", self)
+        self.break_index_input = QLineEdit(self)
+        self.break_index_input.setPlaceholderText("Enter break image number (e.g., 1045)")
+        self.break_index_input.setText(str(self.break_index))
+        break_index_layout.addWidget(break_index_label)
+        break_index_layout.addWidget(self.break_index_input)
+        layout.addLayout(break_index_layout)
 
         # Add a confirm button to close the figure and continue
         confirm_button = QPushButton("Confirm", self)
@@ -408,8 +437,10 @@ class ImageViewer(QMainWindow):
             "heights": sorted(
                 [self.selected_height, self.selected_height2, self.selected_height3]
             ),
+            "bath_height": self.selected_height4,
             "angle": self.angle,
             "flat_top": self.flat_top,
+            "break_index": self.break_index,
         }
 
         self.close()
@@ -464,6 +495,15 @@ class ImageViewer(QMainWindow):
         self.line_selector_cid3 = self.fig.canvas.mpl_connect(
             "button_press_event", self.onclick_height3
         )
+        
+    def set_height4(self):
+        # Disconnect all previous events
+        self.disconnect_all_selectors()
+
+        # Enable height selection for the second height
+        self.line_selector_cid4 = self.fig.canvas.mpl_connect(
+            "button_press_event", self.onclick_height4
+        )
 
     def disconnect_all_selectors(self):
         # Disconnect all selection events (box and height)
@@ -479,6 +519,9 @@ class ImageViewer(QMainWindow):
         if self.line_selector_cid3 is not None:
             self.fig.canvas.mpl_disconnect(self.line_selector_cid3)
             self.line_selector_cid3 = None
+        if self.line_selector_cid4 is not None:
+            self.fig.canvas.mpl_disconnect(self.line_selector_cid4)
+            self.line_selector_cid4 = None
 
     def onclick_height1(self, event):
         # Handle mouse click event to set the first height
@@ -499,6 +542,13 @@ class ImageViewer(QMainWindow):
         if event.inaxes == self.ax:
             self.selected_height3 = int(event.ydata)
             self.height_input3.setText(str(self.selected_height3))
+            self.draw_line()
+            
+    def onclick_height4(self, event):
+        # Handle mouse click event to set the second height
+        if event.inaxes == self.ax:
+            self.selected_height4 = int(event.ydata)
+            self.height_input4.setText(str(self.selected_height4))
             self.draw_line()
 
     def update_height_from_input(self):
@@ -524,6 +574,14 @@ class ImageViewer(QMainWindow):
             self.draw_line()
         except ValueError:
             pass  # Ignore if the input is not valid
+        
+    def update_height_from_input4(self):
+        # Update the second selected height based on the input field
+        try:
+            self.selected_height4 = int(self.height_input4.text())
+            self.draw_line()
+        except ValueError:
+            pass  # Ignore if the input is not valid
 
     def draw_line(self):
         # Remove previous lines if they exist
@@ -531,11 +589,13 @@ class ImageViewer(QMainWindow):
             line.remove()
 
         if self.selected_height is not None:
-            self.ax.axhline(self.selected_height, color="green", linewidth=2)
+            self.ax.axhline(self.selected_height, color="red", linewidth=2)
         if self.selected_height2 is not None:
             self.ax.axhline(self.selected_height2, color="red", linewidth=2)
         if self.selected_height3 is not None:
-            self.ax.axhline(self.selected_height3, color="yellow", linewidth=2)
+            self.ax.axhline(self.selected_height3, color="red", linewidth=2)
+        if self.selected_height4 is not None:
+            self.ax.axhline(self.selected_height4, color="green", linewidth=2)
         self.fig.canvas.draw()
 
 
@@ -550,7 +610,9 @@ def preprocess_images(folder_path: str) -> dict:
     return (
         result["boxes"],
         result["heights"],
+        result["bath_height"],
         result["angle"],
+        result["break_index"],
         viewer.folder_path,
         viewer.flat_top,
     )

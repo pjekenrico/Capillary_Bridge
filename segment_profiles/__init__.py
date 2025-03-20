@@ -46,7 +46,7 @@ def run_segmentation_from_json(json_file: str):
             "tol_circle": 5,
             "tol_circle_normal": 0.05,
         }
-        boxes, lines, angle, path, flat_top = preprocess_images(folder_path=".")
+        boxes, lines, bath_height, angle, break_index, path, flat_top = preprocess_images(folder_path=".")
 
         data = {
             "folder_path": path,
@@ -55,6 +55,8 @@ def run_segmentation_from_json(json_file: str):
             "angle": angle,
             "flat_top": flat_top,
             "segmentation_options": segmentation_options,
+            "bath_height": bath_height,
+            "break_index": break_index,
         }
 
     pprint(data)

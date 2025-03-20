@@ -1,3 +1,11 @@
+Results
+figures
+topview
+Parameter_Study
+*.csv
+*.png
+analyze_profiles/check_*.py
+
 # Python Bytecode
 __pycache__/
 *.py[cod]
