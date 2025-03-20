@@ -1,7 +1,7 @@
 import os, re, glob
 import matplotlib
 import matplotlib.pyplot as plt
-from matplotlib.patches import Circle
+from matplotlib.patches import Circle, Rectangle
 
 matplotlib.use("Qt5Agg")
 import numpy as np
@@ -138,6 +138,8 @@ def run_segmentation(
 
     # idx_to_analyze = segment_indices(numbers)
     x, yc, r = preprocess_circle(folder_path, idx_to_analyze, extension, angle, lines)
+    
+    q = 0
 
     for idx, xc in zip(idx_to_analyze, x):
         print(f"\nidx= {idx}")
@@ -159,12 +161,51 @@ def run_segmentation(
             for box in boxes:
                 initial_lsf[box[1] : box[-1], box[0] : box[2]] = -c0
             initial_lsf = initial_lsf[lines[0] : lines[-1]]
+                    # tmp
+            ax.cla()
+            ax.imshow(orig_img, interpolation="quadric", cmap=plt.get_cmap("gray"))
+            ax.autoscale(False, axis="x")
+            ax.autoscale(False, axis="y")
+            
+            # Plot the rectangles found in box
+            ax.add_patch(
+                Rectangle(
+                    (boxes[0][0], boxes[0][1]),
+                    np.abs(boxes[0][0]- boxes[0][2]),
+                    np.abs(boxes[0][3] - boxes[0][1]),
+                    facecolor="none",
+                    edgecolor="#ff00ff",
+                    linewidth=1.5,
+                )
+            )
+            ax.add_patch(
+                Rectangle(
+                    (boxes[1][0], boxes[1][1]),
+                    np.abs(boxes[1][0] - boxes[1][2]),
+                    np.abs(boxes[1][3] - boxes[1][1]),
+                    facecolor="none",
+                    edgecolor="#ff00ff",
+                    linewidth=1.5,
+                )
+            )
+            
+            ax.add_patch(
+                Circle(
+                    (yc, xc + lines[0]),
+                    r,
+                    facecolor="none",
+                    edgecolor="#00ffff",
+                    linewidth=1.5,
+                )
+            )
+            plt.savefig(f"video/00.png", dpi=300)
+            plt.pause(0.001)
         else:
             initial_lsf = 2 * c0 / np.pi * np.arctan(phi)
 
         img = np.interp(img, [np.min(img), np.max(img)], [0, 255])
         old_contours = np.inf * np.ones_like(boxes)
-        converged = False
+        converged = False      
 
         for phi in find_lsf(
             img=img[lines[0] : lines[-1]],
@@ -209,7 +250,7 @@ def run_segmentation(
                 )
                 profile = contour[profile_idx]
                 profiles.append(profile)
-                ax.plot(profile[:, 1], profile[:, 0] + lines[0], linewidth=1)
+                ax.plot(profile[:, 1], profile[:, 0] + lines[0], linewidth=1.5, color="#ff00ff")
 
             # Update the left image
             ax.add_patch(
@@ -217,10 +258,13 @@ def run_segmentation(
                     (yc, xc + lines[0]),
                     r,
                     facecolor="none",
-                    edgecolor=(0, 0.8, 0.8),
-                    linewidth=1,
+                    edgecolor="#00ffff",
+                    linewidth=1.5,
                 )
             )
+            if q % 10 == 0:
+                plt.savefig(f"video/{q}.png", dpi=300)
+            q += 1
             plt.pause(0.001)
 
             if converged:
