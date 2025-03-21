@@ -134,9 +134,6 @@ def residence_time(t, s, R, H, dR):
         else:
             residence[i] = residence[i+1]
     residence = np.flip(residence)
-    # residence = np.cumsum(residence)
-    # normalise residence time
-    # residence = residence / np.max(residence)
     
     return residence
 
@@ -315,14 +312,14 @@ def main():
                 sel.annotation.set_text(f"x={x:.2f}, y={y:.2f}\nNo data")
 
     # Show all figures at once
-    # plt.show()
+        plt.show()
 
-    # Save figures **after** viewing them
-    for fig, name in figures:
-        # save in a folder called "figures"
-        os.makedirs("figures", exist_ok=True)
-        fig.savefig(f"figures/{filename}_{name}.png")
-        plt.close(fig)
+    # # Save figures **after** viewing them
+    # for fig, name in figures:
+    #     # save in a folder called "figures"
+    #     os.makedirs("figures", exist_ok=True)
+    #     fig.savefig(f"figures/{filename}_{name}.png")
+    #     plt.close(fig)
     print("Done!")
   
 

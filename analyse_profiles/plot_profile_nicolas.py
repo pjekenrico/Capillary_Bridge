@@ -15,67 +15,61 @@ from scipy.interpolate import UnivariateSpline, RectBivariateSpline
 from matplotlib.collections import LineCollection
 from matplotlib.colors import Normalize
 
+# Enable LaTeX rendering in plots
+plt.rcParams["text.usetex"] = True
+plt.rcParams["font.family"] = "serif"
+plt.rcParams["axes.labelsize"] = 14
+plt.rcParams["xtick.labelsize"] = 12
+plt.rcParams["ytick.labelsize"] = 12
+plt.rcParams["legend.fontsize"] = 12
 
-def smooth_RH(t, s, R, H, smoothing=0.2):
-    data = (R[0](t, s) + R[1](t, s)) / 2
-    R_smooth = RectBivariateSpline(t, s, data, s=smoothing)
+# Constants
+g = 9.81  # m/s^2
 
-    data = (H[0](t, s) + H[1](t, s)) / 2
-    H_smooth = RectBivariateSpline(t, s, data, s=smoothing)
-    return R_smooth, H_smooth
+# Dictionary mapping filenames to their corresponding properties
+fluid_properties = {
+    "WG50": {"density": 1129, "surface_tension": 0.067, "viscosity": 6e-3},
+    "WG10": {"density": 1023, "surface_tension": 0.071, "viscosity": 1.5e-3},
+    "W":    {"density": 1000, "surface_tension": 0.071, "viscosity": 1e-3}
+}
 
+# Function to extract fluid properties from filename
+def get_fluid_properties(filename):
+    if "WG50" in filename:
+        return fluid_properties["WG50"]
+    elif "WG10" in filename:
+        return fluid_properties["WG10"]
+    else:
+        return fluid_properties["W"]
+
+def set_nice_grid(ax):
+    ax.grid(True)
+    ax.grid(which="major", linestyle="-", linewidth="0.5", color="gray")
+    ax.grid(which="minor", linestyle=":", linewidth="0.5", color="gray")
+    ax.minorticks_on()
 
 def main():
-    path = os.path.join("series", "NWG50_V50_profiles.npz")
+    filename = "TLWG50_V1000_profiles.npz"
+    path = os.path.join("series", filename)
 
-    # Reads and extracts data from npz
-    data = Dataframe(data_path=path)
-    bridge = Bridge(data.contact_lines, data.indices, data.circle_positions)
+    properties = get_fluid_properties(filename)
+    density = properties["density"]
+    surface_tension = properties["surface_tension"]
+    viscosity = properties["viscosity"] 
 
+    data = Dataframe(data_path=path) 
+    bridge = Bridge(
+        data.contact_lines,
+        data.indices,
+        data.circle_positions,
+        bath_height=data.metadata["bath_height"] - data.metadata["lines"][0],
+        break_index=data.metadata["break_index"]
+    )
     s = np.linspace(0, 1, 40)
     t = bridge.times
     
     bridge.plot_profiles_at_time(t[-1])
-    
-    # t = np.linspace(np.min(t), np.max(t), 100)
-
-    # # Smooth the radius and height functions
-    # R_smooth, H_smooth = smooth_RH(bridge.times, s, bridge.R, bridge.H, smoothing=0)
-
-    # # Extract smoothed radius and height at t0
-    # r = np.squeeze(R_smooth(t[-1], s))
-    # h = np.squeeze(H_smooth(t[-1], s))
-    
-    # # Circle position at t0
-    # xc = bridge.xc(t[-1])
-    # yc = bridge.yc
-    # rc = 81
-    # r_s = bridge.r
-    # apex = bridge.apex(t[-1])
-    # apex_xc = apex + r_s
-    
-
-    # # Plot the smoothed profile
-    # fig, ax = plt.subplots(figsize=(8, 6))
-    # ax.plot(r, h, color="black", linewidth=2)  # Simple black line
-    
-    # # Plot the circle
-    # circle = plt.Circle((0, xc), r_s, color="red", fill=False)
-    # ax.add_artist(circle)
-    # ax.plot(0, xc, 'bo')
-    # ax.plot(0, apex, 'ro')
-    # ax.plot(0, apex_xc, 'go')
-    
-
-    # plt.xlabel("Contact Radius [mm]")
-    # plt.ylabel("Contact Height [mm]")
-
-    # # plt.xlim([np.min(r), np.max(r)])
-    # # plt.ylim([np.min(h), np.max(h)])
-    # plt.tight_layout()
-
-    # plt.show()
-    # print("Done!")
+    plt.show()
 
 if __name__ == "__main__":
     main()

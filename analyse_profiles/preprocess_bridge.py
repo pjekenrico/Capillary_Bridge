@@ -1,8 +1,10 @@
 import numpy as np
-from scipy.interpolate import UnivariateSpline, RectBivariateSpline
+from scipy.interpolate import UnivariateSpline, RectBivariateSpline, interp1d, PchipInterpolator
 from scipy.integrate import quad
 import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
+from scipy.signal import savgol_filter
+from sklearn.isotonic import IsotonicRegression
 
 
 def rolling_average(data, window_size):
@@ -28,7 +30,6 @@ def rolling_average(data, window_size):
     data = np.pad(data, (window_size // 2, window_size // 2), mode="edge")
 
     return np.convolve(data, kernel, mode="valid")
-
 
 class Bridge(object):
 
@@ -173,22 +174,77 @@ class Bridge(object):
     def compute_contact_angles(self, ds=0.02):
 
         contact_radia = np.array([c(self.times, np.array([1 - ds, 1])) for c in self.R])
-
         contact_heights = np.array([c(self.times, [1 - ds, 1]) for c in self.H])
-
+        
         contact_angles = np.arctan(
             (contact_heights[:, :, 1] - contact_heights[:, :, 0])
             / (contact_radia[:, :, 1] - contact_radia[:, :, 0])
         )
-
         contact_angles = np.rad2deg(contact_angles)
         contact_angles = np.abs(contact_angles)
-        contact_angles = [
-            UnivariateSpline(self.times, rolling_average(angles, 7), k=2, s=0)
-            for angles in contact_angles
-        ]
-
-        return contact_angles
+        
+        def remove_outliers_robust(data, times, factor=0):
+            median = np.median(data)
+            mad = np.median(np.abs(data - median))
+            if mad == 0:
+                mad = np.mean(np.abs(data - median))
+            threshold = factor * mad
+            valid_indices = np.where(np.abs(data - median) <= threshold)[0]
+            if len(valid_indices) < 5:
+                return data
+            return interp1d(times[valid_indices], data[valid_indices], 
+                            kind='linear', fill_value='extrapolate')(times)
+        
+        def remove_sharp_changes_robust(data, times, factor=0):
+            dt = np.diff(times)
+            if np.any(dt <= 0):
+                raise ValueError("Times must be strictly increasing.")
+            d_data = np.diff(data) / dt
+            median_deriv = np.median(d_data)
+            mad_deriv = np.median(np.abs(d_data - median_deriv))
+            if mad_deriv == 0:
+                mad_deriv = np.mean(np.abs(d_data - median_deriv))
+            threshold = factor * mad_deriv
+            valid_deriv_indices = np.where(np.abs(d_data - median_deriv) <= threshold)[0]
+            valid_mask = np.zeros_like(data, dtype=bool)
+            for i in valid_deriv_indices:
+                valid_mask[i] = True
+                valid_mask[i+1] = True
+            valid_indices = np.where(valid_mask)[0]
+            if len(valid_indices) < 10:
+                return data
+            return interp1d(times[valid_indices], data[valid_indices], 
+                            kind='linear', fill_value='extrapolate')(times)
+        
+        def apply_adaptive_smoothing(data, window_ratio=0.6):
+            min_window = 5
+            window_length = max(min_window, int(len(data) * window_ratio))
+            if window_length % 2 == 0:
+                window_length += 1
+            polyorder = min(3, window_length - 1)
+            try:
+                return savgol_filter(data, window_length, polyorder)
+            except:
+                return data
+        
+        def very_smooth(data):
+            return np.polyval(np.polyfit(np.arange(len(data)), data, 3), np.arange(len(data)))
+        
+        def enforce_monotonic_trend(times, data):
+            ir = IsotonicRegression(increasing=False, out_of_bounds='clip')
+            return ir.fit_transform(times.reshape(-1, 1), data)
+        
+        processed_contact_angles = []
+        for angles in contact_angles:
+            cleaned = remove_outliers_robust(angles, self.times)
+            cleaned = remove_sharp_changes_robust(cleaned, self.times)
+            smoothed = apply_adaptive_smoothing(cleaned)
+            over_smoothed = very_smooth(smoothed)
+            monotonic = enforce_monotonic_trend(self.times, over_smoothed)
+            interpolator = PchipInterpolator(self.times, monotonic)
+            processed_contact_angles.append(interpolator)
+        
+        return processed_contact_angles
 
     def plot_profiles_at_time(self, t, N=100):
         s = np.linspace(0, 1, N)
@@ -279,39 +335,36 @@ class Bridge(object):
         r = np.mean(r)
         return xc, y, r, apex
 
-    def compute_curvature(self):
-
-        # Reinterpolate the derivatives to have a smoother curvature
-        t = self.times
-        s = np.linspace(0, 1, 100)
-
-        dx = [
-            RectBivariateSpline(t, s, self.R[0](t, s, dy=1)),
-            RectBivariateSpline(t, s, self.R[1](t, s, dy=1)),
-        ]
-
-        ddx = [
-            RectBivariateSpline(t, s, dx[0](t, s, dy=1)),
-            RectBivariateSpline(t, s, dx[1](t, s, dy=1)),
-        ]
-
-        dy = [
-            RectBivariateSpline(t, s, self.H[0](t, s, dy=1)),
-            RectBivariateSpline(t, s, self.H[1](t, s, dy=1)),
-        ]
-
-        ddy = [
-            RectBivariateSpline(t, s, dy[0](t, s, dy=1)),
-            RectBivariateSpline(t, s, dy[1](t, s, dy=1)),
-        ]
-
-        curvature = []
-        for i in range(2):
-            curvature.append(
-                lambda t, s: np.abs(
-                    (dx[i](t, s) * ddy[i](t, s) - dy[i](t, s) * ddx[i](t, s))
-                    / ((dx[i](t, s) ** 2 + dy[i](t, s) ** 2) ** 1.5)
-                )
-            )
-
-        return curvature
+    def compute_curvature(self, N=40):
+        s = np.linspace(0, 1, N)
+        t = np.array(self.times)
+        
+        # Evaluate interpolators over the grid of t and s
+        R_left = self.R[0](t, s)
+        R_right = self.R[1](t, s)
+        data_R = (R_left + R_right) / 2
+        
+        H_left = self.H[0](t, s)
+        H_right = self.H[1](t, s)
+        data_H = (H_left + H_right) / 2
+        
+        smoothing = 0.1
+        # Smooth the averaged data
+        R_smooth = RectBivariateSpline(t, s, data_R, s=smoothing)
+        H_smooth = RectBivariateSpline(t, s, data_H, s=smoothing)
+        
+        # Evaluate the smoothed functions on the original grid
+        R = R_smooth(t, s)
+        H = H_smooth(t, s)
+        
+        # Compute derivatives with respect to s (axis=1)
+        dRds = np.gradient(R, s, axis=1)
+        dHds = np.gradient(H, s, axis=1)
+        
+        dRdH = dRds / dHds
+        
+        ddRddH = np.gradient(dRdH, s, axis=1) / dHds
+        
+        curvature = ddRddH / (1 + dRdH**2)**1.5 - 1/(np.sqrt(1 + dRdH**2) * R)
+        
+        return np.squeeze(curvature)
